@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { Upload, Image as ImageIcon, Sparkles, Download, Settings, X, AlertCircle, Server, Layers, RefreshCw, User, Shirt, Utensils, Car, Leaf, LayoutGrid, Tag, FileText, Refrigerator, Pill, Monitor, BookOpen, Gamepad2, Baby, CheckSquare, Square, Smartphone, MonitorPlay, RectangleVertical, Play, Copy, Check, Camera } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Upload, Image as ImageIcon, Sparkles, Download, Settings, X, AlertCircle, Server, Layers, RefreshCw, User, Shirt, Utensils, Car, Leaf, LayoutGrid, Tag, FileText, Refrigerator, Pill, Monitor, BookOpen, Gamepad2, Baby, CheckSquare, Square, Smartphone, MonitorPlay, RectangleVertical, Play, Copy, Check, Camera, Coins, Zap } from 'lucide-react';
 
 // --- Types ---
 type CategoryType = 'fashion' | 'kids-fashion' | 'food' | 'kitchen' | 'beauty' | 'medicine' | 'herbal' | 'automotive' | 'electronics' | 'ebook' | 'toys';
@@ -8,6 +8,7 @@ type ModelType = 'no-model' | 'indo' | 'bule' | 'mannequin' | 'hand-model';
 type GenderType = 'male' | 'female';
 type PoseStyle = 'standard' | 'casual' | 'gen-z' | 'formal' | 'candid' | 'cinematic';
 type AspectRatioType = '1:1' | '9:16' | '16:9' | '4:5' | '3:4';
+type QualityMode = 'eco' | 'hd'; 
 
 interface CaptionData {
     title: string;
@@ -24,7 +25,7 @@ interface GeneratedMedia {
   caption?: CaptionData;
 }
 
-// --- Constants: Background Presets ---
+// --- Background Presets ---
 const BACKGROUND_OPTIONS: Record<string, {id: string, label: string}[]> = {
     fashion: [
         {id: 'studio', label: 'Studio Clean'},
@@ -43,80 +44,105 @@ const BACKGROUND_OPTIONS: Record<string, {id: string, label: string}[]> = {
         {id: 'garden', label: 'Home Garden'}
     ],
     food: [
-        {id: 'wooden-table', label: 'Wooden Table'},
-        {id: 'marble-top', label: 'Marble Counter'},
-        {id: 'picnic', label: 'Outdoor Picnic'},
-        {id: 'restaurant', label: 'Fine Dining'},
-        {id: 'kitchen', label: 'Modern Kitchen'},
-        {id: 'dark-moody', label: 'Dark Moody'}
+        {id: 'wooden-table', label: 'Meja Kayu'},
+        {id: 'marble-top', label: 'Marmer Mewah'},
+        {id: 'picnic', label: 'Piknik Outdoor'},
+        {id: 'restaurant', label: 'Restoran'},
+        {id: 'kitchen', label: 'Dapur Modern'},
+        {id: 'dark-moody', label: 'Dark & Moody'}
     ],
     kitchen: [
-        {id: 'modern-kitchen', label: 'Modern Kitchen'},
-        {id: 'rustic-kitchen', label: 'Rustic Kitchen'},
-        {id: 'chef-table', label: 'Chef Table'},
-        {id: 'dining-room', label: 'Dining Room'},
-        {id: 'sink-area', label: 'Clean Sink Area'},
-        {id: 'pantry', label: 'Pantry Shelf'}
+        {id: 'modern-kitchen', label: 'Dapur Modern'},
+        {id: 'rustic-kitchen', label: 'Dapur Klasik'},
+        {id: 'chef-table', label: 'Meja Koki'},
+        {id: 'dining-room', label: 'Ruang Makan'},
+        {id: 'sink-area', label: 'Area Wastafel'},
+        {id: 'pantry', label: 'Lemari Pantry'}
     ],
     beauty: [
-        {id: 'water-splash', label: 'Water Splash'},
-        {id: 'vanity', label: 'Vanity Mirror'},
-        {id: 'silk-sheets', label: 'Silk Texture'},
-        {id: 'bathroom', label: 'Luxury Bathroom'},
-        {id: 'pastel-podium', label: 'Pastel Podium'},
-        {id: 'flowers', label: 'Floral Arrangement'}
+        {id: 'water-splash', label: 'Cipratan Air'},
+        {id: 'vanity', label: 'Meja Rias'},
+        {id: 'silk-sheets', label: 'Kain Sutra'},
+        {id: 'bathroom', label: 'Kamar Mandi'},
+        {id: 'pastel-podium', label: 'Podium Pastel'},
+        {id: 'flowers', label: 'Dekorasi Bunga'}
     ],
     medicine: [
-        {id: 'pharmacy', label: 'Pharmacy Shelf'},
-        {id: 'lab', label: 'White Lab'},
-        {id: 'medical-table', label: 'Medical Table'},
-        {id: 'clean-white', label: 'Sterile White'},
-        {id: 'cabinet', label: 'Medicine Cabinet'},
-        {id: 'hospital', label: 'Hospital Setting'}
+        {id: 'pharmacy', label: 'Rak Farmasi'},
+        {id: 'lab', label: 'Laboratorium'},
+        {id: 'medical-table', label: 'Meja Medis'},
+        {id: 'clean-white', label: 'Putih Steril'},
+        {id: 'cabinet', label: 'Lemari Obat'},
+        {id: 'hospital', label: 'Rumah Sakit'}
     ],
     automotive: [
-        {id: 'garage', label: 'Modern Garage'},
-        {id: 'highway', label: 'Highway Speed'},
-        {id: 'showroom', label: 'Luxury Showroom'},
-        {id: 'mountain-road', label: 'Mountain Road'},
-        {id: 'city-night', label: 'City Night Neon'},
-        {id: 'desert', label: 'Open Desert'}
+        {id: 'garage', label: 'Garasi Modern'},
+        {id: 'highway', label: 'Jalan Raya'},
+        {id: 'showroom', label: 'Showroom'},
+        {id: 'mountain-road', label: 'Jalan Gunung'},
+        {id: 'city-night', label: 'Kota Malam Hari'},
+        {id: 'desert', label: 'Padang Pasir'}
     ],
     electronics: [
         {id: 'gaming-setup', label: 'Gaming Setup'},
-        {id: 'office-desk', label: 'Office Desk'},
-        {id: 'minimalist-tech', label: 'Minimalist Tech'},
+        {id: 'office-desk', label: 'Meja Kantor'},
+        {id: 'minimalist-tech', label: 'Minimalis Tech'},
         {id: 'cyberpunk', label: 'Cyberpunk Neon'},
-        {id: 'living-room', label: 'Living Room TV'},
-        {id: 'studio-dark', label: 'Dark Tech Studio'}
+        {id: 'living-room', label: 'Ruang Tamu'},
+        {id: 'studio-dark', label: 'Studio Gelap'}
     ],
     herbal: [
-        {id: 'leaves', label: 'Green Leaves'},
-        {id: 'sunlight', label: 'Morning Sunlight'},
-        {id: 'wooden-board', label: 'Rustic Wood'},
-        {id: 'forest', label: 'Deep Forest'},
-        {id: 'zen-stone', label: 'Zen Stones'},
-        {id: 'kitchen-window', label: 'Kitchen Window'}
+        {id: 'leaves', label: 'Dedaunan Hijau'},
+        {id: 'sunlight', label: 'Cahaya Pagi'},
+        {id: 'wooden-board', label: 'Papan Kayu'},
+        {id: 'forest', label: 'Hutan Alami'},
+        {id: 'zen-stone', label: 'Batu Zen'},
+        {id: 'kitchen-window', label: 'Jendela Dapur'}
     ],
     ebook: [
-        {id: 'reading-nook', label: 'Cozy Nook'},
-        {id: 'wooden-desk', label: 'Wooden Desk'},
-        {id: 'library', label: 'Library Shelf'},
+        {id: 'reading-nook', label: 'Pojok Baca'},
+        {id: 'wooden-desk', label: 'Meja Belajar'},
+        {id: 'library', label: 'Rak Buku'},
         {id: 'tablet-mockup', label: 'Tablet Display'},
-        {id: 'coffee-shop', label: 'Coffee Shop'},
-        {id: 'bed-side', label: 'Bed Side'}
+        {id: 'coffee-shop', label: 'Kafe'},
+        {id: 'bed-side', label: 'Samping Tempat Tidur'}
     ],
     toys: [
-        {id: 'playroom', label: 'Playroom Floor'},
-        {id: 'grass', label: 'Green Grass'},
-        {id: 'abstract-color', label: 'Abstract Color'},
-        {id: 'preschool', label: 'Preschool'},
-        {id: 'shelf', label: 'Toy Shelf'},
-        {id: 'sandpit', label: 'Sandpit'}
+        {id: 'playroom', label: 'Ruang Bermain'},
+        {id: 'grass', label: 'Rumput Hijau'},
+        {id: 'abstract-color', label: 'Warna Abstrak'},
+        {id: 'preschool', label: 'Sekolah TK'},
+        {id: 'shelf', label: 'Rak Mainan'},
+        {id: 'sandpit', label: 'Area Pasir'}
     ]
 };
 
-// --- Main Component ---
+// --- Helper: Kompres Gambar (Menghemat Credit/Token) ---
+const compressImage = (base64Str: string, maxWidth: number = 800): Promise<string> => {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.src = base64Str;
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+
+            if (width > maxWidth) {
+                height = Math.round((height * maxWidth) / width);
+                width = maxWidth;
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx?.drawImage(img, 0, 0, width, height);
+            
+            // Kompresi JPEG quality 0.8
+            resolve(canvas.toDataURL('image/jpeg', 0.8));
+        };
+    });
+};
+
 export default function App() {
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -124,7 +150,7 @@ export default function App() {
   const [generatedMedia, setGeneratedMedia] = useState<GeneratedMedia[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   
-  // Core Settings
+  // State Pengaturan
   const [activeCategory, setActiveCategory] = useState<CategoryType>('fashion');
   const [bgStyle, setBgStyle] = useState<string>('studio');
   const [modelType, setModelType] = useState<ModelType>('no-model');
@@ -134,21 +160,18 @@ export default function App() {
   const [aspectRatio, setAspectRatio] = useState<AspectRatioType>('1:1');
   const [imageCount, setImageCount] = useState<number>(1);
   const [engine, setEngine] = useState<EngineType>('gemini-nano');
+  const [qualityMode, setQualityMode] = useState<QualityMode>('eco');
   
-  // New Configs: Context & Caption
   const [productContext, setProductContext] = useState('');
   const [enableCaption, setEnableCaption] = useState(false);
   const [captionData, setCaptionData] = useState<CaptionData>({ title: '', desc: '', price: '' });
 
-  // Keys
   const [hfToken, setHfToken] = useState('');
   const [geminiKey, setGeminiKey] = useState('');
   const [showApiSettings, setShowApiSettings] = useState(false);
 
-  // Canvas Ref
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Handle File Upload
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -161,104 +184,47 @@ export default function App() {
     }
   };
 
-  // --- PROMPT CONSTRUCTORS ---
+  // Logika Estimasi Biaya
+  const calculateCost = () => {
+      let baseCost = 1; 
+      if (qualityMode === 'hd') baseCost = 2.5; // HD lebih mahal tokennya
+      return Math.round(baseCost * imageCount);
+  };
 
-  // 1. Image Prompt (IMPROVED HIJAB & MODEL LOGIC)
   const getImagePrompt = (category: CategoryType, style: string, model: ModelType, gen: GenderType, hijab: boolean, pose: PoseStyle, ratio: AspectRatioType, context: string) => {
-    let baseInstruction = "Edit this image. Replace the background and if a model is requested, display the product being worn/held by the model. ";
-    let subject = context ? `the product (${context})` : "the product";
-    let visualStrictness = "Do NOT change the product logo/text/shape. Keep the product EXACTLY as it is. ";
-    let quality = "High quality, photorealistic, 8k, highly detailed. ";
-    let composition = `Composition aspect ratio target: ${ratio}. `;
+    let baseInstruction = "Product replacement. ";
+    let subject = context ? `Product: ${context}` : "Product";
+    let strictness = "Keep product logo/shape EXACT.";
+    let quality = "Photorealistic, 8k."; 
     
-    // Model Description - IMPROVED LOGIC
     let modelDesc = "";
     if (model !== 'no-model' && model !== 'hand-model') {
-        let ethnicity = "";
-        if (model === 'indo') ethnicity = "Indonesian (Asian features)";
-        else if (model === 'bule') ethnicity = "Caucasian/Western";
-        else if (model === 'mannequin') ethnicity = "Mannequin";
-
+        let ethnicity = model === 'indo' ? "Indonesian" : model === 'bule' ? "Western" : "Mannequin";
         let genderStr = gen === 'male' ? "Male" : "Female";
+        let hijabStr = (model === 'indo' && gen === 'female' && hijab) ? "wearing Hijab," : "";
         
-        // Hijab Logic
-        let hijabStr = "";
-        if (model === 'indo' && gen === 'female' && hijab) {
-            hijabStr = "wearing a stylish modern Hijab headscarf covering the head, muslim fashion, polite clothing,";
-        }
-
-        if (category === 'kids-fashion') {
-            modelDesc = `a cute ${ethnicity} little ${gen === 'male' ? 'boy' : 'girl'} ${hijabStr}`;
-        } else {
-            modelDesc = `a professional ${ethnicity} ${genderStr} model ${hijabStr}`;
-        }
+        modelDesc = category === 'kids-fashion' 
+            ? `Cute ${ethnicity} ${gen === 'male' ? 'boy' : 'girl'} ${hijabStr}` 
+            : `Pro ${ethnicity} ${genderStr} model ${hijabStr}`;
     } else if (model === 'hand-model') {
-        modelDesc = gen === 'male' ? "a male hand" : "a female hand";
+        modelDesc = gen === 'male' ? "male hand" : "female hand";
     }
 
-    // Category Logic
-    let interaction = "";
-    let atmosphere = "";
-    
+    let scene = "";
     switch (category) {
         case 'fashion':
         case 'kids-fashion':
-            if (model !== 'no-model' && model !== 'hand-model') {
-                // Incorporate Pose here
-                interaction = `worn by ${modelDesc}. The model is WEARING ${subject}. Fit the product naturally on the model's body. Pose: ${pose} style.`;
-            } else {
-                interaction = `Show ${subject} placed aesthetically.`;
-            }
-            atmosphere = `Fashion photography, trendy look. Background: ${style}.`;
+            scene = (model !== 'no-model' && model !== 'hand-model') 
+                ? `Worn by ${modelDesc}. Pose: ${pose}.` 
+                : `Aesthetic placement.`;
             break;
-        case 'food':
-            interaction = "Plated beautifully, appetizing presentation.";
-            atmosphere = `Professional food photography, delicious. Background: ${style}.`;
-            break;
-        case 'kitchen':
-            interaction = "Placed on a surface.";
-            atmosphere = `Kitchenware photography, bright, clean, functional atmosphere. Background: ${style}.`;
-            break;
-        case 'beauty':
-            interaction = "Placed elegantly on a podium or surface.";
-            atmosphere = `Cosmetic photography, soft lighting, glowing skin, luxury vibe. Background: ${style}.`;
-            break;
-        case 'medicine':
-            interaction = "Placed in a sterile setting.";
-            atmosphere = `Medical photography, trustworthy, clean, sterile, bright white lighting. Background: ${style}.`;
-            break;
-        case 'herbal':
-            interaction = "Surrounded by natural ingredients (leaves, herbs).";
-            atmosphere = `Wellness photography, organic, natural light, fresh, healthy. Background: ${style}.`;
-            break;
-        case 'automotive':
-            interaction = "Parked in a cinematic angle.";
-            atmosphere = `Automotive photography, dramatic lighting, reflections, metallic shine. Background: ${style}.`;
-            break;
-        case 'electronics':
-            interaction = "Set up and ready to use.";
-            atmosphere = `Tech photography, futuristic, neon or clean minimalist, high tech vibe. Background: ${style}.`;
-            break;
-        case 'ebook':
-            interaction = "Displayed clearly.";
-            atmosphere = `Lifestyle photography, cozy, intelligent, focus on reading experience. Background: ${style}.`;
-            break;
-        case 'toys':
-            interaction = "Placed in a fun way.";
-            atmosphere = `Toy photography, playful, colorful, vibrant, dynamic lighting. Background: ${style}.`;
-            break;
-        default:
-            interaction = "Presented professionally.";
-            atmosphere = `Product photography. Background: ${style}.`;
-            break;
+        case 'food': scene = "Plated beautifully."; break;
+        default: scene = "Professional placement."; break;
     }
 
-    return `${baseInstruction} Show ${subject} ${interaction} ${atmosphere} ${composition} ${visualStrictness} ${quality}`;
+    return `${baseInstruction} ${subject}. Scene: ${scene} Background: ${style}. Ratio: ${ratio}. ${strictness} ${quality}`;
   };
 
-  // --- API HANDLERS ---
-
-  // 1. Generate Image (Gemini)
   const generateImageGemini = async (base64Image: string) => {
     try {
         const cleanBase64 = base64Image.split(',')[1];
@@ -282,29 +248,8 @@ export default function App() {
     } catch (e) { throw e; }
   };
 
-  // 2. Generate Image (HF)
-  const generateImageHF = async (base64Image: string) => {
-      const MODEL_URL = "https://api-inference.huggingface.co/models/timbrooks/instruct-pix2pix";
-      const prompt = `Put this product (${productContext}) in a ${bgStyle} background.`;
-      
-      const response = await fetch(MODEL_URL, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${hfToken.trim()}`, "Content-Type": "application/json" },
-          body: JSON.stringify({
-              inputs: base64Image,
-              parameters: { prompt, image_guidance_scale: 1.5, guidance_scale: 7.5 }
-          }),
-      });
-      if (!response.ok) throw new Error("HF Error: Check Token or Network");
-      const blob = await response.blob();
-      return URL.createObjectURL(blob);
-  };
-
-  // --- MAIN HANDLER ---
   const handleGenerate = async () => {
     if (!uploadedImage) { setErrorMsg("Upload foto produk dulu."); return; }
-    
-    // Strict Key Checks
     if (engine === 'gemini-nano' && !geminiKey) { setErrorMsg("Butuh Gemini Key."); setShowApiSettings(true); return; }
     if (engine === 'huggingface' && !hfToken) { setErrorMsg("Butuh HF Token."); setShowApiSettings(true); return; }
 
@@ -313,12 +258,31 @@ export default function App() {
     setGeneratedMedia([]); 
 
     try {
-        // IMAGE GEN LOGIC (Loop for Image Count)
+        // Optimasi: Kompres sebelum kirim (Hemat Token)
+        const targetWidth = qualityMode === 'eco' ? 512 : 1024;
+        setProgressMsg(`Mengompres Foto (${qualityMode.toUpperCase()} Mode)...`);
+        const optimizedImage = await compressImage(uploadedImage, targetWidth);
+
         for (let i = 0; i < imageCount; i++) {
-            setProgressMsg(`Generating Image ${i + 1}/${imageCount}...`);
+            setProgressMsg(`Memproses Foto ${i + 1}/${imageCount}...`);
             let resultUrl = "";
-            if (engine === 'gemini-nano') resultUrl = await generateImageGemini(uploadedImage);
-            else resultUrl = await generateImageHF(uploadedImage);
+            
+            if (engine === 'gemini-nano') resultUrl = await generateImageGemini(optimizedImage);
+            else {
+                const MODEL_URL = "https://api-inference.huggingface.co/models/timbrooks/instruct-pix2pix";
+                const prompt = `Put this product (${productContext}) in a ${bgStyle} background.`;
+                const response = await fetch(MODEL_URL, {
+                    method: "POST",
+                    headers: { Authorization: `Bearer ${hfToken.trim()}`, "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        inputs: optimizedImage,
+                        parameters: { prompt, image_guidance_scale: 1.5, guidance_scale: 7.5 }
+                    }),
+                });
+                if (!response.ok) throw new Error("HF Error");
+                const blob = await response.blob();
+                resultUrl = URL.createObjectURL(blob);
+            }
 
             if (resultUrl) {
                 setGeneratedMedia(prev => [
@@ -335,19 +299,14 @@ export default function App() {
             }
         }
     } catch (err: any) {
-        let msg = err.message || "Gagal generate.";
-        if (msg.includes("Failed to fetch")) msg = "Koneksi Gagal. Cek internet atau Token HF Anda.";
-        setErrorMsg(msg);
-        if (msg.includes("HF") || msg.includes("Gemini")) {
-            setShowApiSettings(true);
-        }
+        setErrorMsg(err.message || "Gagal generate.");
+        setShowApiSettings(true);
     } finally {
         setIsGenerating(false);
         setProgressMsg('');
     }
   };
 
-  // --- DOWNLOAD ---
   const handleDownload = (media: GeneratedMedia) => {
       const link = document.createElement('a');
       link.download = `prodgen-${media.id}.jpg`;
@@ -379,7 +338,7 @@ export default function App() {
     <button 
         onClick={() => { setActiveCategory(id); setBgStyle(BACKGROUND_OPTIONS[id] ? BACKGROUND_OPTIONS[id][0].id : 'studio'); }}
         className={`w-auto md:w-full flex-shrink-0 flex flex-col items-center justify-center py-3 px-1 gap-1 transition-all border-b-4 md:border-b-0 md:border-l-4 ${activeCategory === id ? 'bg-indigo-50 border-indigo-600 text-indigo-700' : 'bg-transparent border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-800'}`}
-        style={{ minWidth: '70px' }} // Min width for mobile scroll
+        style={{ minWidth: '70px' }}
     >
         <Icon className={`w-5 h-5 ${activeCategory === id ? 'stroke-[2.5px]' : ''}`} />
         <span className="text-[10px] font-bold text-center leading-tight whitespace-nowrap md:whitespace-normal">{label}</span>
@@ -397,8 +356,8 @@ export default function App() {
                 <Layers className="h-5 w-5 text-white" />
               </div>
               <div>
-                  <h1 className="font-bold text-lg tracking-tight text-slate-900 leading-none">Infinica <span className="text-indigo-600">Pro</span></h1>
-                  <p className="text-[10px] text-slate-400 font-medium">AI Product by Calica</p>
+                  <h1 className="font-bold text-lg tracking-tight text-slate-900 leading-none">ProdGen <span className="text-indigo-600">Pro</span></h1>
+                  <p className="text-[10px] text-slate-400 font-medium">AI Product Photoshoot</p>
               </div>
             </div>
             <button 
@@ -409,10 +368,10 @@ export default function App() {
             </button>
       </nav>
 
-      {/* Main Content: Flex Col on Mobile, Row on Desktop */}
+      {/* Content */}
       <div className="flex flex-1 flex-col md:flex-row overflow-hidden">
           
-          {/* SIDEBAR: Horizontal on Mobile, Vertical on Desktop */}
+          {/* Sidebar */}
           <div className="w-full md:w-20 bg-white border-b md:border-b-0 md:border-r border-slate-200 flex flex-row md:flex-col py-2 md:py-4 gap-1 shrink-0 overflow-x-auto md:overflow-y-auto hide-scrollbar z-40 shadow-sm">
                <CategoryBtn id="fashion" icon={Shirt} label="Fashion" />
                <CategoryBtn id="kids-fashion" icon={Baby} label="Anak" />
@@ -427,56 +386,32 @@ export default function App() {
                <CategoryBtn id="toys" icon={Gamepad2} label="Mainan" />
           </div>
 
-          {/* MAIN WORKSPACE */}
           <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
             
-            {/* CONFIG PANEL: Full width on mobile, Fixed width on desktop */}
+            {/* Panel Config */}
             <div className={`
                 absolute md:static inset-0 z-30 bg-slate-50 md:block
                 w-full md:w-[380px] border-r border-slate-200 flex flex-col overflow-y-auto p-4 md:p-6 gap-6
                 ${generatedMedia.length > 0 && !isGenerating ? 'hidden md:flex' : 'flex'} 
-                /* Logic: Hide config on mobile if we have results, unless generating */
             `}>
                 
-                {/* Server Settings */}
                 {showApiSettings && (
                     <div className="bg-white border border-indigo-100 p-4 rounded-xl shadow-sm animate-in slide-in-from-top-2 border-l-4 border-l-indigo-600">
                         <div className="flex justify-between items-center mb-3">
                             <h3 className="font-bold text-xs uppercase text-slate-400 flex items-center gap-2"><Server className="w-3 h-3"/> Server Configuration</h3>
                         </div>
-                        
                         <div className="mb-4">
-                            <label className="text-[10px] font-bold text-slate-500 mb-1 block">Generation Engine</label>
+                            <label className="text-[10px] font-bold text-slate-500 mb-1 block">Engine</label>
                             <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
                                 <button onClick={() => setEngine('gemini-nano')} className={`flex-1 py-1.5 text-[10px] font-bold rounded-md transition ${engine === 'gemini-nano' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Gemini</button>
                                 <button onClick={() => setEngine('huggingface')} className={`flex-1 py-1.5 text-[10px] font-bold rounded-md transition ${engine === 'huggingface' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>HuggingFace</button>
                             </div>
                         </div>
-
-                        {engine === 'gemini-nano' && (
-                            <div className="mb-3">
-                                <label className="text-[10px] font-bold text-slate-500 mb-1 block">Google API Key</label>
-                                <input type="password" value={geminiKey} onChange={(e) => setGeminiKey(e.target.value)} placeholder="AIzaSy..." className="w-full text-xs p-2 border rounded-lg bg-slate-50"/>
-                            </div>
-                        )}
-
-                        {engine === 'huggingface' && (
-                             <div className="mb-3">
-                                <label className="text-[10px] font-bold text-slate-500 mb-1 block">Hugging Face Token</label>
-                                <input type="password" value={hfToken} onChange={(e) => setHfToken(e.target.value)} placeholder="hf_..." className="w-full text-xs p-2 border rounded-lg bg-slate-50"/>
-                             </div>
-                        )}
-                        
-                        {errorMsg && (
-                            <div className="mt-3 p-3 bg-red-50 border border-red-100 rounded text-[10px] text-red-600 font-medium flex flex-col gap-2">
-                                <div className="font-bold flex items-center gap-1"><AlertCircle className="w-3 h-3"/> Error:</div>
-                                <div>{errorMsg}</div>
-                            </div>
-                        )}
+                        <input type="password" value={geminiKey} onChange={(e) => setGeminiKey(e.target.value)} placeholder="Gemini Key" className="w-full text-xs p-2 border rounded-lg bg-slate-50 mb-2"/>
+                        <input type="password" value={hfToken} onChange={(e) => setHfToken(e.target.value)} placeholder="HF Token" className="w-full text-xs p-2 border rounded-lg bg-slate-50"/>
                     </div>
                 )}
 
-                {/* Upload */}
                 <div>
                     <h2 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2"><Upload className="w-4 h-4"/> 1. Upload Produk</h2>
                     {!uploadedImage ? (
@@ -493,251 +428,108 @@ export default function App() {
                     )}
                 </div>
 
-                {/* Info */}
-                <div>
-                     <h2 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
-                        <FileText className="w-4 h-4"/> 2. Info Produk
+                {/* Hemat Credit Mode */}
+                <div className="bg-indigo-50/50 p-4 rounded-xl border border-indigo-100">
+                     <h2 className="text-sm font-bold text-indigo-900 mb-2 flex items-center gap-2">
+                        <Zap className="w-4 h-4 text-orange-500"/> Hemat Credit
                     </h2>
-                    <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-4">
-                        <input 
-                            type="text"
-                            value={productContext}
-                            onChange={(e) => setProductContext(e.target.value)}
-                            placeholder="Context (e.g., Spicy Chips)"
-                            className="w-full text-xs p-2.5 rounded-lg border border-slate-200 bg-slate-50 outline-none focus:border-indigo-500 transition"
-                        />
-                        
-                        <div className="pt-2 border-t border-slate-100">
-                             <div className="flex items-center justify-between mb-3">
-                                <label className="text-xs font-bold text-slate-700 flex items-center gap-2">
-                                    <Tag className="w-3 h-3 text-indigo-500" /> Teks Promo
-                                </label>
-                                <button 
-                                    onClick={() => setEnableCaption(!enableCaption)}
-                                    className={`relative w-9 h-5 rounded-full transition-colors ${enableCaption ? 'bg-indigo-600' : 'bg-slate-300'}`}
-                                >
-                                    <span className={`absolute top-1 left-1 bg-white w-3 h-3 rounded-full transition-transform ${enableCaption ? 'translate-x-4' : ''}`} />
-                                </button>
-                             </div>
-                             {enableCaption && (
-                                 <div className="space-y-2 animate-in slide-in-from-top-2">
-                                     <input type="text" placeholder="Judul" value={captionData.title} onChange={e => setCaptionData({...captionData, title: e.target.value})} className="w-full text-xs p-2 rounded border border-slate-200" />
-                                     <input type="text" placeholder="Deskripsi" value={captionData.desc} onChange={e => setCaptionData({...captionData, desc: e.target.value})} className="w-full text-xs p-2 rounded border border-slate-200" />
-                                     <input type="text" placeholder="Harga" value={captionData.price} onChange={e => setCaptionData({...captionData, price: e.target.value})} className="w-full text-xs p-2 rounded border border-slate-200" />
-                                 </div>
-                             )}
-                        </div>
+                    <div className="flex gap-2">
+                        <button onClick={() => setQualityMode('eco')} className={`flex-1 flex flex-col items-center p-2 rounded-lg border transition ${qualityMode === 'eco' ? 'bg-white border-green-500 shadow-sm ring-1 ring-green-500' : 'bg-transparent border-indigo-200 text-slate-500'}`}>
+                            <span className="text-[10px] font-bold text-green-600">ECO Mode</span>
+                            <span className="text-[9px]">Hemat (512px)</span>
+                        </button>
+                        <button onClick={() => setQualityMode('hd')} className={`flex-1 flex flex-col items-center p-2 rounded-lg border transition ${qualityMode === 'hd' ? 'bg-white border-indigo-600 shadow-sm ring-1 ring-indigo-600' : 'bg-transparent border-indigo-200 text-slate-500'}`}>
+                            <span className="text-[10px] font-bold text-indigo-600">HD Mode</span>
+                            <span className="text-[9px]">Jelas (1024px)</span>
+                        </button>
                     </div>
                 </div>
 
-                {/* Config */}
                 <div>
-                    <h2 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
-                        <Settings className="w-4 h-4"/> 3. Konfigurasi Visual
-                    </h2>
+                     <h2 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2"><FileText className="w-4 h-4"/> 2. Info Produk</h2>
+                     <input type="text" value={productContext} onChange={(e) => setProductContext(e.target.value)} placeholder="Contoh: Kripik Singkong" className="w-full text-xs p-2.5 rounded-lg border border-slate-200 bg-white outline-none focus:border-indigo-500 transition" />
+                </div>
 
+                <div>
+                    <h2 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2"><Settings className="w-4 h-4"/> 3. Konfigurasi</h2>
                     <div className="space-y-4">
-                        {/* Background */}
                         <div>
-                            <label className="text-xs font-bold text-slate-500 mb-2 block">Lokasi / Background</label>
+                            <label className="text-xs font-bold text-slate-500 mb-2 block">Background</label>
                             <div className="grid grid-cols-2 gap-2">
                                 {(BACKGROUND_OPTIONS[activeCategory] || BACKGROUND_OPTIONS['fashion']).map((bg) => (
-                                    <button 
-                                        key={bg.id}
-                                        onClick={() => setBgStyle(bg.id)}
-                                        className={`px-3 py-2 text-xs text-left rounded-lg border transition-all ${bgStyle === bg.id ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}
-                                    >
+                                    <button key={bg.id} onClick={() => setBgStyle(bg.id)} className={`px-3 py-2 text-xs text-left rounded-lg border transition-all ${bgStyle === bg.id ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}>
                                         {bg.label}
                                     </button>
                                 ))}
                             </div>
                         </div>
-
-                        {/* Model & Gender */}
                         <div>
                             <label className="text-xs font-bold text-slate-500 mb-2 block">Model Presenter</label>
-                            <select 
-                                value={modelType}
-                                onChange={(e) => setModelType(e.target.value as ModelType)}
-                                className="w-full text-xs p-2.5 rounded-lg border border-slate-200 bg-white outline-none focus:border-indigo-500"
-                            >
-                                <option value="no-model">Tanpa Model (Produk Saja)</option>
+                            <select value={modelType} onChange={(e) => setModelType(e.target.value as ModelType)} className="w-full text-xs p-2.5 rounded-lg border border-slate-200 bg-white">
+                                <option value="no-model">Tanpa Model</option>
                                 <option value="hand-model">Dipegang Tangan</option>
                                 <option value="indo">Model Indonesia</option>
                                 <option value="bule">Model Western</option>
                                 <option value="mannequin">Mannequin</option>
                             </select>
-                            
-                            {modelType !== 'no-model' && (
-                                <div className="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-lg">
-                                    <div className="flex gap-2 mb-2">
-                                        <button onClick={() => setGender('female')} className={`flex-1 py-1.5 text-xs font-bold rounded flex items-center justify-center gap-1 ${gender === 'female' ? 'bg-pink-100 text-pink-700 border border-pink-200' : 'bg-white text-slate-500 border'}`}>
-                                            <User className="w-3 h-3" /> Female
-                                        </button>
-                                        <button onClick={() => setGender('male')} className={`flex-1 py-1.5 text-xs font-bold rounded flex items-center justify-center gap-1 ${gender === 'male' ? 'bg-blue-100 text-blue-700 border border-blue-200' : 'bg-white text-slate-500 border'}`}>
-                                            <User className="w-3 h-3" /> Male
-                                        </button>
-                                    </div>
-                                    {/* HIJAB LOGIC FIXED */}
-                                    {modelType === 'indo' && gender === 'female' && (
-                                        <button onClick={() => setUseHijab(!useHijab)} className="w-full flex items-center gap-2 text-xs text-slate-700 font-medium mt-1 p-1 hover:bg-white rounded transition">
-                                            {useHijab ? <CheckSquare className="w-4 h-4 text-indigo-600"/> : <Square className="w-4 h-4 text-slate-400"/>} 
-                                            {activeCategory === 'kids-fashion' ? "Hijab Anak" : "Pakai Hijab"}
-                                        </button>
-                                    )}
+                            {(modelType !== 'no-model' && modelType !== 'hand-model') && (
+                                <div className="mt-2 grid grid-cols-3 gap-2">
+                                    {['standard', 'casual', 'gen-z', 'formal', 'candid', 'cinematic'].map(p => (
+                                        <button key={p} onClick={() => setPoseStyle(p as PoseStyle)} className={`py-1 text-[10px] rounded border ${poseStyle === p ? 'bg-indigo-100 border-indigo-300 text-indigo-700' : 'bg-white'}`}>{p}</button>
+                                    ))}
                                 </div>
                             )}
                         </div>
-
-                        {/* POSE CONFIGURATION - RESTORED & WORKING */}
-                        {(modelType !== 'no-model' && modelType !== 'hand-model') && (
-                            <div>
-                                <label className="text-xs font-bold text-slate-500 mb-2 block flex items-center gap-2">
-                                    <Camera className="w-3 h-3"/> Gaya Pose
-                                </label>
-                                <div className="grid grid-cols-3 gap-2">
-                                    {[
-                                        { id: 'standard', label: 'Standard' },
-                                        { id: 'casual', label: 'Casual' },
-                                        { id: 'gen-z', label: 'Gen-Z' },
-                                        { id: 'formal', label: 'Formal' },
-                                        { id: 'candid', label: 'Candid' },
-                                        { id: 'cinematic', label: 'Cinema' }
-                                    ].map((pose) => (
-                                        <button
-                                            key={pose.id}
-                                            onClick={() => setPoseStyle(pose.id as PoseStyle)}
-                                            className={`py-1.5 px-1 text-[10px] rounded-lg border transition-all text-center ${
-                                                poseStyle === pose.id 
-                                                ? 'bg-indigo-100 text-indigo-700 border-indigo-200 font-bold' 
-                                                : 'bg-white text-slate-500 border-slate-200 hover:border-indigo-300'
-                                            }`}
-                                        >
-                                            {pose.label}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Image Count */}
                         <div>
                             <label className="text-xs font-bold text-slate-500 mb-2 flex justify-between">
                                 <span>Jumlah Foto</span>
                                 <span className="text-indigo-600">{imageCount}</span>
                             </label>
-                            <input 
-                                type="range" 
-                                min="1" 
-                                max="4" 
-                                value={imageCount} 
-                                onChange={(e) => setImageCount(parseInt(e.target.value))}
-                                className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                            />
-                            <div className="flex justify-between text-[10px] text-slate-400 mt-1">
-                                <span>1</span><span>4</span>
-                            </div>
-                        </div>
-
-                        {/* Ratio */}
-                        <div>
-                            <label className="text-xs font-bold text-slate-500 mb-2 block">Rasio (Auto Crop)</label>
-                            <div className="flex bg-white rounded-lg border border-slate-200 p-1">
-                                {[
-                                    { r: '1:1', icon: Square },
-                                    { r: '9:16', icon: Smartphone },
-                                    { r: '16:9', icon: MonitorPlay },
-                                    { r: '4:5', icon: RectangleVertical }
-                                ].map((ratio) => (
-                                    <button 
-                                        key={ratio.r}
-                                        onClick={() => setAspectRatio(ratio.r as AspectRatioType)}
-                                        className={`flex-1 py-1.5 rounded-md flex flex-col items-center gap-1 transition-all ${aspectRatio === ratio.r ? 'bg-indigo-100 text-indigo-700 font-bold' : 'text-slate-400 hover:bg-slate-50'}`}
-                                    >
-                                        <ratio.icon className="w-3.5 h-3.5" />
-                                        <span className="text-[9px]">{ratio.r}</span>
-                                    </button>
-                                ))}
-                            </div>
+                            <input type="range" min="1" max="4" value={imageCount} onChange={(e) => setImageCount(parseInt(e.target.value))} className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
                         </div>
                     </div>
                 </div>
 
-                {/* Generate Button */}
                 <div className="mt-auto pb-20 md:pb-4">
-                    {errorMsg && !showApiSettings && (
-                        <div className="mb-3 p-3 bg-red-50 text-red-600 text-xs rounded-lg border border-red-100 flex gap-2">
-                            <AlertCircle className="w-4 h-4 shrink-0" />
-                            <span className="leading-tight">{errorMsg}</span>
+                    <div className="flex items-center justify-between px-2 mb-2">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Estimasi Token</span>
+                        <div className="flex items-center gap-1 bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full border border-yellow-200 shadow-sm">
+                            <Coins className="w-3 h-3" />
+                            <span className="text-[10px] font-bold">~{calculateCost()} Units</span>
                         </div>
-                    )}
-                    <button 
-                        onClick={handleGenerate}
-                        disabled={!uploadedImage || isGenerating}
-                        className={`w-full py-4 rounded-xl font-bold text-white shadow-lg transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600`}
-                    >
+                    </div>
+                    <button onClick={handleGenerate} disabled={!uploadedImage || isGenerating} className="w-full py-4 rounded-xl font-bold text-white shadow-lg flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 disabled:opacity-50">
                         {isGenerating ? <RefreshCw className="animate-spin w-5 h-5"/> : <Sparkles className="w-5 h-5"/>}
                         {isGenerating ? (progressMsg || 'Processing...') : 'Generate Photo'}
                     </button>
                 </div>
             </div>
 
-            {/* RESULTS */}
-            <div className={`
-                flex-1 bg-slate-100 p-4 md:p-8 overflow-y-auto
-                ${generatedMedia.length === 0 && !isGenerating ? 'hidden md:block' : 'block'}
-                /* On mobile: Show results only if they exist or generating. On desktop: always show */
-            `}>
+            <div className={`flex-1 bg-slate-100 p-4 md:p-8 overflow-y-auto ${generatedMedia.length === 0 && !isGenerating ? 'hidden md:block' : 'block'}`}>
                 <div className="max-w-5xl mx-auto h-full flex flex-col">
                     <div className="flex items-center justify-between mb-4 md:mb-6">
                         <h2 className="text-xl font-bold text-slate-800">Hasil Generation</h2>
-                        {/* Mobile Back Button to Config */}
-                        <button 
-                            onClick={() => setGeneratedMedia([])} 
-                            className="md:hidden text-xs font-bold text-indigo-600 bg-white px-3 py-1.5 rounded-lg border border-indigo-100 shadow-sm"
-                        >
-                            + Buat Baru
-                        </button>
+                        <button onClick={() => setGeneratedMedia([])} className="md:hidden text-xs font-bold text-indigo-600 bg-white px-3 py-1.5 rounded-lg border border-indigo-100">+ Buat Baru</button>
                     </div>
-
                     {generatedMedia.length === 0 && !isGenerating ? (
                         <div className="flex-1 flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-slate-300 rounded-2xl bg-slate-200/50 min-h-[300px]">
                             <LayoutGrid className="w-16 h-16 mb-4 text-slate-300" />
                             <p className="font-medium">Area Hasil</p>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-6 pb-24 md:pb-20">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-24">
                             {isGenerating && (
                                 <div className="aspect-square bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col items-center justify-center p-8 animate-pulse">
                                     <div className="w-16 h-16 rounded-full border-4 border-slate-100 border-t-indigo-600 animate-spin mb-4"></div>
-                                    <p className="text-sm font-bold text-slate-700">Creating Image...</p>
+                                    <p className="text-sm font-bold text-slate-700">Sedang Memproses...</p>
                                 </div>
                             )}
-
                             {generatedMedia.map((media) => (
-                                <div key={media.id} className="group relative bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-200 hover:shadow-md transition-all">
-                                    
-                                    <div className="relative">
-                                        <img src={media.url} alt="Result" className="w-full h-auto object-contain bg-slate-50" />
-                                        {media.caption && (
-                                            <div className="absolute bottom-4 left-4 right-4 bg-white/90 p-4 rounded-xl shadow-lg backdrop-blur-sm border border-white/50">
-                                                <h3 className="font-bold text-slate-900 text-lg leading-tight">{media.caption.title}</h3>
-                                                <p className="text-xs text-slate-500 mt-1">{media.caption.desc}</p>
-                                                <div className="mt-2 font-bold text-indigo-600 text-base">{media.caption.price}</div>
-                                            </div>
-                                        )}
-                                    </div>
-
+                                <div key={media.id} className="group relative bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-200">
+                                    <img src={media.url} alt="Result" className="w-full h-auto object-contain bg-slate-50" />
                                     <div className="absolute top-4 right-4 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button 
-                                            onClick={() => handleDownload(media)}
-                                            className="bg-white text-indigo-600 p-2.5 rounded-full hover:scale-110 transition shadow-lg flex items-center justify-center"
-                                            title="Download"
-                                        >
-                                            <Download className="w-5 h-5" />
-                                        </button>
+                                        <button onClick={() => handleDownload(media)} className="bg-white text-indigo-600 p-2.5 rounded-full shadow-lg"><Download className="w-5 h-5" /></button>
                                     </div>
-                                    
                                     <div className="p-3 bg-white border-t border-slate-100 flex justify-between items-center">
                                         <span className="text-xs font-medium text-slate-600 capitalize">{media.style.replace('-', ' ')}</span>
                                         <span className="text-[10px] text-slate-400">ID: {media.id.toString().slice(-4)}</span>
@@ -748,7 +540,6 @@ export default function App() {
                     )}
                 </div>
             </div>
-
           </div>
       </div>
     </div>
