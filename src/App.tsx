@@ -1,8 +1,7 @@
 import React, { useState, useRef } from 'react';
-import { Upload, Image as ImageIcon, Sparkles, Download, Settings, X, AlertCircle, Server, Layers, RefreshCw, User, Shirt, Utensils, Car, Leaf, LayoutGrid, Tag, FileText, Refrigerator, Pill, Monitor, BookOpen, Gamepad2, Baby, CheckSquare, Square, Smartphone, MonitorPlay, RectangleVertical, Play, Copy, Check } from 'lucide-react';
+import { Upload, Image as ImageIcon, Sparkles, Download, Settings, X, AlertCircle, Server, Layers, RefreshCw, User, Shirt, Utensils, Car, Leaf, LayoutGrid, Tag, FileText, Refrigerator, Pill, Monitor, BookOpen, Gamepad2, Baby, CheckSquare, Square, Smartphone, MonitorPlay, RectangleVertical, Play, Copy, Check, Camera } from 'lucide-react';
 
 // --- Types ---
-// Removed 'video-gen'
 type CategoryType = 'fashion' | 'kids-fashion' | 'food' | 'kitchen' | 'beauty' | 'medicine' | 'herbal' | 'automotive' | 'electronics' | 'ebook' | 'toys';
 type EngineType = 'gemini-nano' | 'huggingface';
 type ModelType = 'no-model' | 'indo' | 'bule' | 'mannequin' | 'hand-model';
@@ -133,7 +132,7 @@ export default function App() {
   const [useHijab, setUseHijab] = useState(false); 
   const [poseStyle, setPoseStyle] = useState<PoseStyle>('standard');
   const [aspectRatio, setAspectRatio] = useState<AspectRatioType>('1:1');
-  const [imageCount, setImageCount] = useState<number>(1); // RESTORED
+  const [imageCount, setImageCount] = useState<number>(1);
   const [engine, setEngine] = useState<EngineType>('gemini-nano');
   
   // New Configs: Context & Caption
@@ -182,7 +181,7 @@ export default function App() {
 
         let genderStr = gen === 'male' ? "Male" : "Female";
         
-        // Hijab Logic - Stronger Enforcement
+        // Hijab Logic
         let hijabStr = "";
         if (model === 'indo' && gen === 'female' && hijab) {
             hijabStr = "wearing a stylish modern Hijab headscarf covering the head, muslim fashion, polite clothing,";
@@ -205,7 +204,8 @@ export default function App() {
         case 'fashion':
         case 'kids-fashion':
             if (model !== 'no-model' && model !== 'hand-model') {
-                interaction = `worn by ${modelDesc}. The model is WEARING ${subject}. Fit the product naturally on the model's body. Pose: ${pose}.`;
+                // Incorporate Pose here
+                interaction = `worn by ${modelDesc}. The model is WEARING ${subject}. Fit the product naturally on the model's body. Pose: ${pose} style.`;
             } else {
                 interaction = `Show ${subject} placed aesthetically.`;
             }
@@ -378,7 +378,6 @@ export default function App() {
   const CategoryBtn = ({ id, icon: Icon, label }: { id: CategoryType, icon: any, label: string }) => (
     <button 
         onClick={() => { setActiveCategory(id); setBgStyle(BACKGROUND_OPTIONS[id] ? BACKGROUND_OPTIONS[id][0].id : 'studio'); }}
-        // Fix: Changed w-full to w-auto on mobile to prevent full-width buttons that block horizontal scroll
         className={`w-auto md:w-full flex-shrink-0 flex flex-col items-center justify-center py-3 px-1 gap-1 transition-all border-b-4 md:border-b-0 md:border-l-4 ${activeCategory === id ? 'bg-indigo-50 border-indigo-600 text-indigo-700' : 'bg-transparent border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-800'}`}
         style={{ minWidth: '70px' }} // Min width for mobile scroll
     >
@@ -432,7 +431,6 @@ export default function App() {
           <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
             
             {/* CONFIG PANEL: Full width on mobile, Fixed width on desktop */}
-            {/* Added md:relative to handle z-index context correctly */}
             <div className={`
                 absolute md:static inset-0 z-30 bg-slate-50 md:block
                 w-full md:w-[380px] border-r border-slate-200 flex flex-col overflow-y-auto p-4 md:p-6 gap-6
@@ -591,7 +589,38 @@ export default function App() {
                             )}
                         </div>
 
-                        {/* Image Count - RESTORED */}
+                        {/* POSE CONFIGURATION - RESTORED & WORKING */}
+                        {(modelType !== 'no-model' && modelType !== 'hand-model') && (
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 mb-2 block flex items-center gap-2">
+                                    <Camera className="w-3 h-3"/> Gaya Pose
+                                </label>
+                                <div className="grid grid-cols-3 gap-2">
+                                    {[
+                                        { id: 'standard', label: 'Standard' },
+                                        { id: 'casual', label: 'Casual' },
+                                        { id: 'gen-z', label: 'Gen-Z' },
+                                        { id: 'formal', label: 'Formal' },
+                                        { id: 'candid', label: 'Candid' },
+                                        { id: 'cinematic', label: 'Cinema' }
+                                    ].map((pose) => (
+                                        <button
+                                            key={pose.id}
+                                            onClick={() => setPoseStyle(pose.id as PoseStyle)}
+                                            className={`py-1.5 px-1 text-[10px] rounded-lg border transition-all text-center ${
+                                                poseStyle === pose.id 
+                                                ? 'bg-indigo-100 text-indigo-700 border-indigo-200 font-bold' 
+                                                : 'bg-white text-slate-500 border-slate-200 hover:border-indigo-300'
+                                            }`}
+                                        >
+                                            {pose.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Image Count */}
                         <div>
                             <label className="text-xs font-bold text-slate-500 mb-2 flex justify-between">
                                 <span>Jumlah Foto</span>
@@ -610,7 +639,7 @@ export default function App() {
                             </div>
                         </div>
 
-                        {/* Pose & Ratio */}
+                        {/* Ratio */}
                         <div>
                             <label className="text-xs font-bold text-slate-500 mb-2 block">Rasio (Auto Crop)</label>
                             <div className="flex bg-white rounded-lg border border-slate-200 p-1">
