@@ -220,10 +220,11 @@ export default function App() {
     } else if (model === 'hand-model') {
         m = `Held by ${gen} hand. `;
     }
-    return `${m}Bg: ${style}. Ratio: ${ratio}. 8k photorealistic. Keep product shape.`;
+    return `${m}Bg: ${style}. Ratio: ${ratio}. 8k photorealistic. Keep product shape exactly.`;
   };
 
   const generateImageGemini = async (base64Image: string) => {
+    console.log("Memanggil API Gemini...");
     try {
         const cleanBase64 = base64Image.split(',')[1];
         const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${geminiKey}`;
@@ -234,21 +235,30 @@ export default function App() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: "image/jpeg", data: cleanBase64 } }] }],
-                generationConfig: { responseModalities: ["IMAGE"], temperature: 0.3 }
+                generationConfig: { 
+                  responseModalities: ["TEXT", "IMAGE"], 
+                  temperature: 0.4 
+                }
             })
         });
 
         if (!response.ok) {
             const errData = await response.json();
-            if (response.status === 429) throw new Error("Limit Free Tier tercapai (15/min). Tunggu sebentar.");
-            throw new Error(errData.error?.message || "Koneksi API Gagal.");
+            console.error("API Response Error:", errData);
+            if (response.status === 429) throw new Error("Limit Free Tier tercapai (15 req/menit). Tunggu 1 menit.");
+            if (response.status === 403) throw new Error("API Key salah atau fitur Generative Language belum aktif di Google Cloud.");
+            throw new Error(errData.error?.message || "Terjadi kesalahan pada server Gemini.");
         }
         
         const data = await response.json();
-        const img = data.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData);
-        if (!img) throw new Error("Gagal menghasilkan gambar dari studio.");
-        return `data:image/jpeg;base64,${img.inlineData.data}`;
-    } catch (e) { throw e; }
+        const imgPart = data.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData);
+        if (!imgPart) throw new Error("API berhasil dipanggil tetapi tidak mengembalikan gambar. Coba ganti latar belakang.");
+        
+        return `data:image/jpeg;base64,${imgPart.inlineData.data}`;
+    } catch (e) { 
+        console.error("Fetch Exception:", e);
+        throw e; 
+    }
   };
 
   const handleGenerate = async () => {
@@ -283,7 +293,7 @@ export default function App() {
                     headers: { "Authorization": `Bearer ${hfToken.trim()}` },
                     body: JSON.stringify({ inputs: optimizedImage, parameters: { prompt: `Place in ${bgStyle} background` } }),
                 });
-                if (!response.ok) throw new Error("HuggingFace sedang sibuk.");
+                if (!response.ok) throw new Error("Server HuggingFace sedang sibuk. Coba ganti engine ke Gemini.");
                 const blob = await response.blob();
                 resultUrl = URL.createObjectURL(blob);
             }
@@ -300,7 +310,7 @@ export default function App() {
             }
         }
     } catch (err: any) {
-        setErrorMsg(err.message || "Terjadi kesalahan sistem.");
+        setErrorMsg(err.message || "Terjadi kesalahan sistem saat memproses gambar.");
     } finally {
         setIsGenerating(false);
         setProgressMsg('');
@@ -319,7 +329,7 @@ export default function App() {
       image.src = media.url;
       image.onload = () => {
           canvas.width = image.width;
-          canvas.height = image.height; // Fixed: using image.height
+          canvas.height = image.height;
           ctx.drawImage(image, 0, 0);
           link.href = canvas.toDataURL('image/jpeg');
           link.click();
@@ -338,7 +348,7 @@ export default function App() {
               </div>
               <div>
                   <h1 className="font-bold text-lg tracking-tight text-slate-900 leading-none">ProdGen <span className="text-indigo-600">Pro</span></h1>
-                  <p className="text-[10px] text-slate-400 font-medium tracking-wide uppercase">AI Studio v2.5</p>
+                  <p className="text-[10px] text-slate-400 font-medium tracking-wide uppercase">AI Studio v2.5.1</p>
               </div>
             </div>
             <button 
@@ -387,7 +397,7 @@ export default function App() {
                                 {accountTier === 'free' && (
                                     <p className="text-[9px] text-orange-600 mt-2 flex gap-1 items-start bg-orange-50 p-2 rounded">
                                         <ShieldAlert className="w-3 h-3 shrink-0" />
-                                        <span>Data input akan digunakan Google untuk melatih AI mereka.</span>
+                                        <span>Data input akan digunakan Google untuk melatih AI mereka. Limit ketat 15 req/menit.</span>
                                     </p>
                                 )}
                             </div>
@@ -395,7 +405,7 @@ export default function App() {
                         
                         <div className="space-y-3">
                             <label className="text-[9px] font-bold text-slate-400 uppercase block mb-1">API Keys</label>
-                            <input type="password" value={geminiKey} onChange={(e) => setGeminiKey(e.target.value)} placeholder="Google Gemini Key" className="w-full text-xs p-2 border rounded-lg bg-slate-50 outline-none focus:ring-1 focus:ring-indigo-500"/>
+                            <input type="password" value={geminiKey} onChange={(e) => setGeminiKey(e.target.value)} placeholder="Google Gemini Key (AIza...)" className="w-full text-xs p-2 border rounded-lg bg-slate-50 outline-none focus:ring-1 focus:ring-indigo-500"/>
                             <input type="password" value={hfToken} onChange={(e) => setHfToken(e.target.value)} placeholder="Hugging Face Token" className="w-full text-xs p-2 border rounded-lg bg-slate-50 outline-none focus:ring-1 focus:ring-indigo-500"/>
                         </div>
                     </div>
@@ -484,7 +494,7 @@ export default function App() {
                         </div>
                         <div className="flex-1">
                             <label className="text-xs font-bold text-slate-500 mb-2 block uppercase text-[10px]">Konteks Produk</label>
-                            <input type="text" value={productContext} onChange={(e) => setProductContext(e.target.value)} placeholder="Kemeja, Botol, dll" className="w-full text-xs p-2.5 rounded-lg border border-slate-200 bg-white outline-none focus:border-indigo-500" />
+                            <input type="text" value={productContext} onChange={(e) => setProductContext(e.target.value)} placeholder="Contoh: Botol Kopi" className="w-full text-xs p-2.5 rounded-lg border border-slate-200 bg-white outline-none focus:border-indigo-500" />
                         </div>
                     </div>
                 </div>
@@ -514,7 +524,7 @@ export default function App() {
                     </div>
 
                     {errorMsg && (
-                        <div className="p-3 bg-red-50 text-red-600 text-[10px] font-bold rounded-lg border border-red-100 flex gap-2 animate-in slide-in-from-bottom-2">
+                        <div className="p-3 bg-red-50 text-red-600 text-[10px] font-bold rounded-lg border border-red-100 flex gap-2 animate-in slide-in-from-bottom-2 shadow-sm">
                             <AlertCircle className="w-4 h-4 shrink-0" />
                             <span>{errorMsg}</span>
                         </div>
@@ -550,7 +560,8 @@ export default function App() {
                             {isGenerating && (
                                 <div className="aspect-square bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col items-center justify-center p-8 animate-pulse">
                                     <div className="w-12 h-12 rounded-full border-4 border-slate-100 border-t-indigo-600 animate-spin mb-4"></div>
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Processing Studio...</p>
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-center">Menghubungi Server AI...</p>
+                                    <p className="text-[9px] text-slate-400 mt-2 text-center">Ini mungkin memakan waktu 10-30 detik</p>
                                 </div>
                             )}
                             {generatedMedia.map((media) => (
