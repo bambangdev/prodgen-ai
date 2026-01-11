@@ -398,7 +398,7 @@ export default function App() {
               </div>
               <div>
                   <h1 className="font-bold text-lg tracking-tight text-slate-900 leading-none">Infinica <span className="text-indigo-600">Pro</span></h1>
-                  <p className="text-[10px] text-slate-400 font-medium">AI Product Photoshoot</p>
+                  <p className="text-[10px] text-slate-400 font-medium">AI Product by Calica</p>
               </div>
             </div>
             <button 
