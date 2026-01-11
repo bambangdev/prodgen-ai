@@ -397,7 +397,7 @@ export default function App() {
                 <Layers className="h-5 w-5 text-white" />
               </div>
               <div>
-                  <h1 className="font-bold text-lg tracking-tight text-slate-900 leading-none">ProdGen <span className="text-indigo-600">Pro</span></h1>
+                  <h1 className="font-bold text-lg tracking-tight text-slate-900 leading-none">Infinica <span className="text-indigo-600">Pro</span></h1>
                   <p className="text-[10px] text-slate-400 font-medium">AI Product Photoshoot</p>
               </div>
             </div>
