@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Upload, Image as ImageIcon, Sparkles, Download, Settings, X, AlertCircle, Server, Layers, RefreshCw, User, Shirt, Utensils, Car, Leaf, LayoutGrid, Tag, FileText, Refrigerator, Pill, Monitor, BookOpen, Gamepad2, Baby, CheckSquare, Square, Smartphone, MonitorPlay, RectangleVertical, Play, Copy, Check, Camera, Coins, Zap } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Upload, Image as ImageIcon, Sparkles, Download, Settings, X, AlertCircle, Server, Layers, RefreshCw, User, Shirt, Utensils, Car, Leaf, LayoutGrid, Tag, FileText, Refrigerator, Pill, Monitor, BookOpen, Gamepad2, Baby, CheckSquare, Square, Smartphone, MonitorPlay, RectangleVertical, Camera, Coins, Zap, Info, ShieldCheck, ShieldAlert } from 'lucide-react';
 
 // --- Types ---
 type CategoryType = 'fashion' | 'kids-fashion' | 'food' | 'kitchen' | 'beauty' | 'medicine' | 'herbal' | 'automotive' | 'electronics' | 'ebook' | 'toys';
@@ -9,6 +9,7 @@ type GenderType = 'male' | 'female';
 type PoseStyle = 'standard' | 'casual' | 'gen-z' | 'formal' | 'candid' | 'cinematic';
 type AspectRatioType = '1:1' | '9:16' | '16:9' | '4:5' | '3:4';
 type QualityMode = 'eco' | 'hd'; 
+type AccountTier = 'free' | 'paid';
 
 interface CaptionData {
     title: string;
@@ -25,7 +26,6 @@ interface GeneratedMedia {
   caption?: CaptionData;
 }
 
-// --- Background Presets ---
 const BACKGROUND_OPTIONS: Record<string, {id: string, label: string}[]> = {
     fashion: [
         {id: 'studio', label: 'Studio Clean'},
@@ -117,11 +117,11 @@ const BACKGROUND_OPTIONS: Record<string, {id: string, label: string}[]> = {
     ]
 };
 
-// --- Helper: Kompres Gambar (Menghemat Credit/Token) ---
-const compressImage = (base64Str: string, maxWidth: number = 800): Promise<string> => {
-    return new Promise((resolve) => {
+const compressImage = (base64Str: string, maxWidth: number = 512): Promise<string> => {
+    return new Promise((resolve, reject) => {
         const img = new Image();
         img.src = base64Str;
+        img.onerror = () => reject(new Error("Gagal membaca gambar"));
         img.onload = () => {
             const canvas = document.createElement('canvas');
             let width = img.width;
@@ -135,13 +135,26 @@ const compressImage = (base64Str: string, maxWidth: number = 800): Promise<strin
             canvas.width = width;
             canvas.height = height;
             const ctx = canvas.getContext('2d');
+            if (ctx) ctx.imageSmoothingQuality = 'high';
             ctx?.drawImage(img, 0, 0, width, height);
-            
-            // Kompresi JPEG quality 0.8
-            resolve(canvas.toDataURL('image/jpeg', 0.8));
+            resolve(canvas.toDataURL('image/jpeg', 0.7));
         };
     });
 };
+
+const CategoryBtn = ({ id, activeCategory, setActiveCategory, setBgStyle, icon: Icon, label }: { id: CategoryType, activeCategory: string, setActiveCategory: any, setBgStyle: any, icon: any, label: string }) => (
+    <button 
+        onClick={() => { 
+            setActiveCategory(id); 
+            setBgStyle(BACKGROUND_OPTIONS[id] ? BACKGROUND_OPTIONS[id][0].id : 'studio'); 
+        }}
+        className={`w-auto md:w-full flex-shrink-0 flex flex-col items-center justify-center py-3 px-1 gap-1 transition-all border-b-4 md:border-b-0 md:border-l-4 ${activeCategory === id ? 'bg-indigo-50 border-indigo-600 text-indigo-700' : 'bg-transparent border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-800'}`}
+        style={{ minWidth: '70px' }}
+    >
+        <Icon className={`w-5 h-5 ${activeCategory === id ? 'stroke-[2.5px]' : ''}`} />
+        <span className="text-[10px] font-bold text-center leading-tight whitespace-nowrap md:whitespace-normal">{label}</span>
+    </button>
+);
 
 export default function App() {
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
@@ -161,6 +174,7 @@ export default function App() {
   const [imageCount, setImageCount] = useState<number>(1);
   const [engine, setEngine] = useState<EngineType>('gemini-nano');
   const [qualityMode, setQualityMode] = useState<QualityMode>('eco');
+  const [accountTier, setAccountTier] = useState<AccountTier>('free');
   
   const [productContext, setProductContext] = useState('');
   const [enableCaption, setEnableCaption] = useState(false);
@@ -184,45 +198,29 @@ export default function App() {
     }
   };
 
-  // Logika Estimasi Biaya
-  const calculateCost = () => {
-      let baseCost = 1; 
-      if (qualityMode === 'hd') baseCost = 2.5; // HD lebih mahal tokennya
-      return Math.round(baseCost * imageCount);
+  const calculateCosts = () => {
+      if (engine === 'huggingface' || (engine === 'gemini-nano' && accountTier === 'free')) {
+          return { tokens: 0, idr: 0, free: true };
+      }
+      let tokensPerImage = qualityMode === 'eco' ? 258 : 1024;
+      let totalInputTokens = tokensPerImage * imageCount;
+      let baseCostPerImage = qualityMode === 'eco' ? 550 : 950; 
+      let estimatedIdr = (baseCostPerImage * imageCount) * 1.11;
+      return { tokens: totalInputTokens, idr: Math.ceil(estimatedIdr), free: false };
   };
 
+  const currentCosts = calculateCosts();
+
   const getImagePrompt = (category: CategoryType, style: string, model: ModelType, gen: GenderType, hijab: boolean, pose: PoseStyle, ratio: AspectRatioType, context: string) => {
-    let baseInstruction = "Product replacement. ";
-    let subject = context ? `Product: ${context}` : "Product";
-    let strictness = "Keep product logo/shape EXACT.";
-    let quality = "Photorealistic, 8k."; 
-    
-    let modelDesc = "";
+    let p = `Inpaint product: ${context || 'item'}. `;
+    let m = "";
     if (model !== 'no-model' && model !== 'hand-model') {
-        let ethnicity = model === 'indo' ? "Indonesian" : model === 'bule' ? "Western" : "Mannequin";
-        let genderStr = gen === 'male' ? "Male" : "Female";
-        let hijabStr = (model === 'indo' && gen === 'female' && hijab) ? "wearing Hijab," : "";
-        
-        modelDesc = category === 'kids-fashion' 
-            ? `Cute ${ethnicity} ${gen === 'male' ? 'boy' : 'girl'} ${hijabStr}` 
-            : `Pro ${ethnicity} ${genderStr} model ${hijabStr}`;
+        let h = (gen === 'female' && hijab) ? "hijab " : "";
+        m = `Model: ${gen} ${model === 'indo' ? 'Asian' : 'Western'} ${h}model, pose: ${pose}. `;
     } else if (model === 'hand-model') {
-        modelDesc = gen === 'male' ? "male hand" : "female hand";
+        m = `Held by ${gen} hand. `;
     }
-
-    let scene = "";
-    switch (category) {
-        case 'fashion':
-        case 'kids-fashion':
-            scene = (model !== 'no-model' && model !== 'hand-model') 
-                ? `Worn by ${modelDesc}. Pose: ${pose}.` 
-                : `Aesthetic placement.`;
-            break;
-        case 'food': scene = "Plated beautifully."; break;
-        default: scene = "Professional placement."; break;
-    }
-
-    return `${baseInstruction} ${subject}. Scene: ${scene} Background: ${style}. Ratio: ${ratio}. ${strictness} ${quality}`;
+    return `${m}Bg: ${style}. Ratio: ${ratio}. 8k photorealistic. Keep product shape.`;
   };
 
   const generateImageGemini = async (base64Image: string) => {
@@ -236,71 +234,73 @@ export default function App() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: "image/jpeg", data: cleanBase64 } }] }],
-                generationConfig: { responseModalities: ["IMAGE"], temperature: 0.4 }
+                generationConfig: { responseModalities: ["IMAGE"], temperature: 0.3 }
             })
         });
 
-        if (!response.ok) throw new Error((await response.json()).error?.message || "Gemini Error");
+        if (!response.ok) {
+            const errData = await response.json();
+            if (response.status === 429) throw new Error("Limit Free Tier tercapai (15/min). Tunggu sebentar.");
+            throw new Error(errData.error?.message || "Koneksi API Gagal.");
+        }
+        
         const data = await response.json();
         const img = data.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData);
-        if (!img) throw new Error("No image returned");
+        if (!img) throw new Error("Gagal menghasilkan gambar dari studio.");
         return `data:image/jpeg;base64,${img.inlineData.data}`;
     } catch (e) { throw e; }
   };
 
   const handleGenerate = async () => {
-    if (!uploadedImage) { setErrorMsg("Upload foto produk dulu."); return; }
-    if (engine === 'gemini-nano' && !geminiKey) { setErrorMsg("Butuh Gemini Key."); setShowApiSettings(true); return; }
-    if (engine === 'huggingface' && !hfToken) { setErrorMsg("Butuh HF Token."); setShowApiSettings(true); return; }
+    if (!uploadedImage) { setErrorMsg("Pilih foto produk dulu."); return; }
+    if (isGenerating) return;
+    
+    if (engine === 'gemini-nano' && !geminiKey) { 
+        setErrorMsg("API Key belum diisi. Masukkan di menu Server."); 
+        setShowApiSettings(true); 
+        return; 
+    }
 
     setIsGenerating(true);
     setErrorMsg(null);
     setGeneratedMedia([]); 
 
     try {
-        // Optimasi: Kompres sebelum kirim (Hemat Token)
         const targetWidth = qualityMode === 'eco' ? 512 : 1024;
-        setProgressMsg(`Mengompres Foto (${qualityMode.toUpperCase()} Mode)...`);
+        setProgressMsg(`Mengompres Foto (${qualityMode.toUpperCase()})...`);
         const optimizedImage = await compressImage(uploadedImage, targetWidth);
 
         for (let i = 0; i < imageCount; i++) {
-            setProgressMsg(`Memproses Foto ${i + 1}/${imageCount}...`);
+            setProgressMsg(`Photoshoot ${i + 1}/${imageCount}...`);
             let resultUrl = "";
             
-            if (engine === 'gemini-nano') resultUrl = await generateImageGemini(optimizedImage);
-            else {
+            if (engine === 'gemini-nano') {
+                resultUrl = await generateImageGemini(optimizedImage);
+            } else {
                 const MODEL_URL = "https://api-inference.huggingface.co/models/timbrooks/instruct-pix2pix";
-                const prompt = `Put this product (${productContext}) in a ${bgStyle} background.`;
                 const response = await fetch(MODEL_URL, {
                     method: "POST",
-                    headers: { Authorization: `Bearer ${hfToken.trim()}`, "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        inputs: optimizedImage,
-                        parameters: { prompt, image_guidance_scale: 1.5, guidance_scale: 7.5 }
-                    }),
+                    headers: { "Authorization": `Bearer ${hfToken.trim()}` },
+                    body: JSON.stringify({ inputs: optimizedImage, parameters: { prompt: `Place in ${bgStyle} background` } }),
                 });
-                if (!response.ok) throw new Error("HF Error");
+                if (!response.ok) throw new Error("HuggingFace sedang sibuk.");
                 const blob = await response.blob();
                 resultUrl = URL.createObjectURL(blob);
             }
 
             if (resultUrl) {
-                setGeneratedMedia(prev => [
-                    ...prev, 
-                    { 
-                        id: Date.now() + i, 
-                        url: resultUrl, 
-                        type: 'image',
-                        style: bgStyle,
-                        ratio: aspectRatio,
-                        caption: enableCaption ? {...captionData} : undefined
-                    }
-                ]);
+                setGeneratedMedia(prev => [...prev, { 
+                    id: Date.now() + i, 
+                    url: resultUrl, 
+                    type: 'image', 
+                    style: bgStyle, 
+                    ratio: aspectRatio, 
+                    caption: enableCaption ? {...captionData} : undefined 
+                }]);
             }
         }
     } catch (err: any) {
-        setErrorMsg(err.message || "Gagal generate.");
-        setShowApiSettings(true);
+        setErrorMsg(err.message || "Terjadi kesalahan sistem.");
     } finally {
         setIsGenerating(false);
         setProgressMsg('');
@@ -319,31 +319,12 @@ export default function App() {
       image.src = media.url;
       image.onload = () => {
           canvas.width = image.width;
-          canvas.height = image.height;
+          canvas.height = image.height; // Fixed: using image.height
           ctx.drawImage(image, 0, 0);
-          if (media.caption) {
-               const scale = canvas.width / 1024;
-               ctx.fillStyle = "white";
-               ctx.fillRect(20*scale, canvas.height - 200*scale, canvas.width - 40*scale, 180*scale);
-               ctx.fillStyle = "black";
-               ctx.font = `bold ${40*scale}px sans-serif`;
-               ctx.fillText(media.caption.title, 50*scale, canvas.height - 120*scale);
-          }
           link.href = canvas.toDataURL('image/jpeg');
           link.click();
       };
   };
-
-  const CategoryBtn = ({ id, icon: Icon, label }: { id: CategoryType, icon: any, label: string }) => (
-    <button 
-        onClick={() => { setActiveCategory(id); setBgStyle(BACKGROUND_OPTIONS[id] ? BACKGROUND_OPTIONS[id][0].id : 'studio'); }}
-        className={`w-auto md:w-full flex-shrink-0 flex flex-col items-center justify-center py-3 px-1 gap-1 transition-all border-b-4 md:border-b-0 md:border-l-4 ${activeCategory === id ? 'bg-indigo-50 border-indigo-600 text-indigo-700' : 'bg-transparent border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-800'}`}
-        style={{ minWidth: '70px' }}
-    >
-        <Icon className={`w-5 h-5 ${activeCategory === id ? 'stroke-[2.5px]' : ''}`} />
-        <span className="text-[10px] font-bold text-center leading-tight whitespace-nowrap md:whitespace-normal">{label}</span>
-    </button>
-  );
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col h-screen overflow-hidden">
@@ -357,182 +338,233 @@ export default function App() {
               </div>
               <div>
                   <h1 className="font-bold text-lg tracking-tight text-slate-900 leading-none">ProdGen <span className="text-indigo-600">Pro</span></h1>
-                  <p className="text-[10px] text-slate-400 font-medium">AI Product Photoshoot</p>
+                  <p className="text-[10px] text-slate-400 font-medium tracking-wide uppercase">AI Studio v2.5</p>
               </div>
             </div>
             <button 
                 onClick={() => setShowApiSettings(!showApiSettings)}
                 className={`p-2 rounded-lg border flex items-center gap-2 text-xs font-bold transition ${showApiSettings ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-600'}`}
             >
-                <Server className="w-4 h-4" /> <span className="hidden md:inline">Server</span>
+                <Server className="w-4 h-4" /> <span className="hidden md:inline">Server Settings</span>
             </button>
       </nav>
 
-      {/* Content */}
       <div className="flex flex-1 flex-col md:flex-row overflow-hidden">
           
-          {/* Sidebar */}
-          <div className="w-full md:w-20 bg-white border-b md:border-b-0 md:border-r border-slate-200 flex flex-row md:flex-col py-2 md:py-4 gap-1 shrink-0 overflow-x-auto md:overflow-y-auto hide-scrollbar z-40 shadow-sm">
-               <CategoryBtn id="fashion" icon={Shirt} label="Fashion" />
-               <CategoryBtn id="kids-fashion" icon={Baby} label="Anak" />
-               <CategoryBtn id="food" icon={Utensils} label="Makanan" />
-               <CategoryBtn id="kitchen" icon={Refrigerator} label="Dapur" />
-               <CategoryBtn id="beauty" icon={Sparkles} label="Skincare" />
-               <CategoryBtn id="medicine" icon={Pill} label="Obat" />
-               <CategoryBtn id="herbal" icon={Leaf} label="Herbal" />
-               <CategoryBtn id="automotive" icon={Car} label="Otomotif" />
-               <CategoryBtn id="electronics" icon={Monitor} label="Gadget" />
-               <CategoryBtn id="ebook" icon={BookOpen} label="E-Book" />
-               <CategoryBtn id="toys" icon={Gamepad2} label="Mainan" />
+          <div className="w-full md:w-20 bg-white border-b md:border-b-0 md:border-r border-slate-200 flex flex-row md:flex-col py-2 md:py-4 gap-1 shrink-0 overflow-x-auto md:overflow-y-auto hide-scrollbar z-40">
+               <CategoryBtn id="fashion" activeCategory={activeCategory} setActiveCategory={setActiveCategory} setBgStyle={setBgStyle} icon={Shirt} label="Fashion" />
+               <CategoryBtn id="kids-fashion" activeCategory={activeCategory} setActiveCategory={setActiveCategory} setBgStyle={setBgStyle} icon={Baby} label="Anak" />
+               <CategoryBtn id="food" activeCategory={activeCategory} setActiveCategory={setActiveCategory} setBgStyle={setBgStyle} icon={Utensils} label="Makanan" />
+               <CategoryBtn id="kitchen" activeCategory={activeCategory} setActiveCategory={setActiveCategory} setBgStyle={setBgStyle} icon={Refrigerator} label="Dapur" />
+               <CategoryBtn id="beauty" activeCategory={activeCategory} setActiveCategory={setActiveCategory} setBgStyle={setBgStyle} icon={Sparkles} label="Skincare" />
+               <CategoryBtn id="medicine" activeCategory={activeCategory} setActiveCategory={setActiveCategory} setBgStyle={setBgStyle} icon={Pill} label="Obat" />
+               <CategoryBtn id="herbal" activeCategory={activeCategory} setActiveCategory={setActiveCategory} setBgStyle={setBgStyle} icon={Leaf} label="Herbal" />
+               <CategoryBtn id="automotive" activeCategory={activeCategory} setActiveCategory={setActiveCategory} setBgStyle={setBgStyle} icon={Car} label="Otomotif" />
+               <CategoryBtn id="electronics" activeCategory={activeCategory} setActiveCategory={setActiveCategory} setBgStyle={setBgStyle} icon={Monitor} label="Gadget" />
+               <CategoryBtn id="ebook" activeCategory={activeCategory} setActiveCategory={setActiveCategory} setBgStyle={setBgStyle} icon={BookOpen} label="E-Book" />
+               <CategoryBtn id="toys" activeCategory={activeCategory} setActiveCategory={setActiveCategory} setBgStyle={setBgStyle} icon={Gamepad2} label="Mainan" />
           </div>
 
           <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
             
-            {/* Panel Config */}
-            <div className={`
-                absolute md:static inset-0 z-30 bg-slate-50 md:block
-                w-full md:w-[380px] border-r border-slate-200 flex flex-col overflow-y-auto p-4 md:p-6 gap-6
-                ${generatedMedia.length > 0 && !isGenerating ? 'hidden md:flex' : 'flex'} 
-            `}>
+            <div className={`absolute md:static inset-0 z-30 bg-slate-50 md:block w-full md:w-[380px] border-r border-slate-200 flex flex-col overflow-y-auto p-4 md:p-6 gap-6 ${generatedMedia.length > 0 && !isGenerating ? 'hidden md:flex' : 'flex'}`}>
                 
                 {showApiSettings && (
-                    <div className="bg-white border border-indigo-100 p-4 rounded-xl shadow-sm animate-in slide-in-from-top-2 border-l-4 border-l-indigo-600">
-                        <div className="flex justify-between items-center mb-3">
-                            <h3 className="font-bold text-xs uppercase text-slate-400 flex items-center gap-2"><Server className="w-3 h-3"/> Server Configuration</h3>
+                    <div className="bg-white border border-indigo-100 p-4 rounded-xl shadow-sm border-l-4 border-l-indigo-600 animate-in slide-in-from-top-2">
+                        <label className="text-[10px] font-bold text-slate-500 mb-1 block uppercase">Server & Billing</label>
+                        <div className="flex gap-1 bg-slate-100 p-1 rounded-lg mb-3">
+                            <button onClick={() => setEngine('gemini-nano')} className={`flex-1 py-1.5 text-[10px] font-bold rounded-md transition ${engine === 'gemini-nano' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500'}`}>Gemini AI</button>
+                            <button onClick={() => setEngine('huggingface')} className={`flex-1 py-1.5 text-[10px] font-bold rounded-md transition ${engine === 'huggingface' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500'}`}>HuggingFace</button>
                         </div>
-                        <div className="mb-4">
-                            <label className="text-[10px] font-bold text-slate-500 mb-1 block">Engine</label>
-                            <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
-                                <button onClick={() => setEngine('gemini-nano')} className={`flex-1 py-1.5 text-[10px] font-bold rounded-md transition ${engine === 'gemini-nano' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Gemini</button>
-                                <button onClick={() => setEngine('huggingface')} className={`flex-1 py-1.5 text-[10px] font-bold rounded-md transition ${engine === 'huggingface' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>HuggingFace</button>
+
+                        {engine === 'gemini-nano' && (
+                            <div className="mb-4">
+                                <label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">Tipe Akun Gemini</label>
+                                <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
+                                    <button onClick={() => setAccountTier('free')} className={`flex-1 py-1 text-[9px] font-bold rounded transition ${accountTier === 'free' ? 'bg-white text-green-600 shadow-sm' : 'text-slate-500'}`}>Free Tier</button>
+                                    <button onClick={() => setAccountTier('paid')} className={`flex-1 py-1 text-[9px] font-bold rounded transition ${accountTier === 'paid' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>Paid Tier</button>
+                                </div>
+                                {accountTier === 'free' && (
+                                    <p className="text-[9px] text-orange-600 mt-2 flex gap-1 items-start bg-orange-50 p-2 rounded">
+                                        <ShieldAlert className="w-3 h-3 shrink-0" />
+                                        <span>Data input akan digunakan Google untuk melatih AI mereka.</span>
+                                    </p>
+                                )}
                             </div>
+                        )}
+                        
+                        <div className="space-y-3">
+                            <label className="text-[9px] font-bold text-slate-400 uppercase block mb-1">API Keys</label>
+                            <input type="password" value={geminiKey} onChange={(e) => setGeminiKey(e.target.value)} placeholder="Google Gemini Key" className="w-full text-xs p-2 border rounded-lg bg-slate-50 outline-none focus:ring-1 focus:ring-indigo-500"/>
+                            <input type="password" value={hfToken} onChange={(e) => setHfToken(e.target.value)} placeholder="Hugging Face Token" className="w-full text-xs p-2 border rounded-lg bg-slate-50 outline-none focus:ring-1 focus:ring-indigo-500"/>
                         </div>
-                        <input type="password" value={geminiKey} onChange={(e) => setGeminiKey(e.target.value)} placeholder="Gemini Key" className="w-full text-xs p-2 border rounded-lg bg-slate-50 mb-2"/>
-                        <input type="password" value={hfToken} onChange={(e) => setHfToken(e.target.value)} placeholder="HF Token" className="w-full text-xs p-2 border rounded-lg bg-slate-50"/>
                     </div>
                 )}
 
                 <div>
-                    <h2 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2"><Upload className="w-4 h-4"/> 1. Upload Produk</h2>
+                    <h2 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2"><Upload className="w-4 h-4"/> 1. Upload Foto</h2>
                     {!uploadedImage ? (
-                        <div className="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center hover:bg-white transition cursor-pointer relative bg-slate-100/50">
+                        <div className="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center bg-slate-100/50 hover:bg-white transition relative">
                             <input type="file" accept="image/*" onChange={handleImageUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
                             <div className="bg-white p-3 rounded-full shadow-sm w-fit mx-auto mb-2"><ImageIcon className="w-6 h-6 text-indigo-500" /></div>
-                            <p className="text-xs font-medium text-slate-500">Klik untuk upload foto</p>
+                            <p className="text-xs font-medium text-slate-500">Klik untuk pilih foto produk</p>
                         </div>
                     ) : (
-                        <div className="relative rounded-xl overflow-hidden border border-slate-200 bg-white group shadow-sm">
-                            <img src={uploadedImage} alt="Uploaded" className="w-full h-48 object-contain bg-slate-100" />
-                            <button onClick={() => {setUploadedImage(null); setGeneratedMedia([])}} className="absolute top-2 right-2 bg-white p-1.5 rounded-full shadow hover:text-red-500 transition"><X className="w-4 h-4" /></button>
+                        <div className="relative rounded-xl overflow-hidden border border-slate-200 shadow-sm group">
+                            <img src={uploadedImage} alt="Preview" className="w-full h-40 object-contain bg-slate-200" />
+                            <button onClick={() => {setUploadedImage(null); setGeneratedMedia([])}} className="absolute top-2 right-2 bg-white/90 p-1.5 rounded-full text-red-500 hover:bg-white shadow-md transition"><X className="w-4 h-4" /></button>
                         </div>
                     )}
                 </div>
 
-                {/* Hemat Credit Mode */}
-                <div className="bg-indigo-50/50 p-4 rounded-xl border border-indigo-100">
-                     <h2 className="text-sm font-bold text-indigo-900 mb-2 flex items-center gap-2">
-                        <Zap className="w-4 h-4 text-orange-500"/> Hemat Credit
-                    </h2>
+                <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100">
+                    <div className="flex items-center justify-between mb-3">
+                        <h2 className="text-sm font-bold text-indigo-900 flex items-center gap-2"><Zap className="w-4 h-4 text-orange-500"/> Mode Hemat Piksel</h2>
+                    </div>
                     <div className="flex gap-2">
-                        <button onClick={() => setQualityMode('eco')} className={`flex-1 flex flex-col items-center p-2 rounded-lg border transition ${qualityMode === 'eco' ? 'bg-white border-green-500 shadow-sm ring-1 ring-green-500' : 'bg-transparent border-indigo-200 text-slate-500'}`}>
-                            <span className="text-[10px] font-bold text-green-600">ECO Mode</span>
-                            <span className="text-[9px]">Hemat (512px)</span>
+                        <button onClick={() => setQualityMode('eco')} className={`flex-1 p-2 rounded-lg border transition text-center ${qualityMode === 'eco' ? 'bg-white border-green-500 shadow-sm ring-1 ring-green-500 font-bold text-green-700' : 'bg-transparent border-indigo-200 text-indigo-700/60'}`}>
+                            Eco (512px)
                         </button>
-                        <button onClick={() => setQualityMode('hd')} className={`flex-1 flex flex-col items-center p-2 rounded-lg border transition ${qualityMode === 'hd' ? 'bg-white border-indigo-600 shadow-sm ring-1 ring-indigo-600' : 'bg-transparent border-indigo-200 text-slate-500'}`}>
-                            <span className="text-[10px] font-bold text-indigo-600">HD Mode</span>
-                            <span className="text-[9px]">Jelas (1024px)</span>
+                        <button onClick={() => setQualityMode('hd')} className={`flex-1 p-2 rounded-lg border transition text-center ${qualityMode === 'hd' ? 'bg-white border-indigo-600 shadow-sm ring-1 ring-indigo-600 font-bold text-indigo-700' : 'bg-transparent border-indigo-200 text-indigo-700/60'}`}>
+                            HD (1024px)
                         </button>
                     </div>
                 </div>
 
-                <div>
-                     <h2 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2"><FileText className="w-4 h-4"/> 2. Info Produk</h2>
-                     <input type="text" value={productContext} onChange={(e) => setProductContext(e.target.value)} placeholder="Contoh: Kripik Singkong" className="w-full text-xs p-2.5 rounded-lg border border-slate-200 bg-white outline-none focus:border-indigo-500 transition" />
-                </div>
-
-                <div>
-                    <h2 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2"><Settings className="w-4 h-4"/> 3. Konfigurasi</h2>
-                    <div className="space-y-4">
-                        <div>
-                            <label className="text-xs font-bold text-slate-500 mb-2 block">Background</label>
-                            <div className="grid grid-cols-2 gap-2">
-                                {(BACKGROUND_OPTIONS[activeCategory] || BACKGROUND_OPTIONS['fashion']).map((bg) => (
-                                    <button key={bg.id} onClick={() => setBgStyle(bg.id)} className={`px-3 py-2 text-xs text-left rounded-lg border transition-all ${bgStyle === bg.id ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}>
-                                        {bg.label}
-                                    </button>
-                                ))}
-                            </div>
+                <div className="space-y-4">
+                    <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2"><Settings className="w-4 h-4"/> 2. Visual Studio</h2>
+                    
+                    <div>
+                        <label className="text-xs font-bold text-slate-500 mb-2 block uppercase tracking-wider text-[10px]">Latar Belakang</label>
+                        <div className="grid grid-cols-2 gap-2">
+                            {(BACKGROUND_OPTIONS[activeCategory] || BACKGROUND_OPTIONS['fashion']).map((bg) => (
+                                <button key={bg.id} onClick={() => setBgStyle(bg.id)} className={`px-3 py-2 text-xs text-left rounded-lg border transition-all ${bgStyle === bg.id ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}>
+                                    {bg.label}
+                                </button>
+                            ))}
                         </div>
-                        <div>
-                            <label className="text-xs font-bold text-slate-500 mb-2 block">Model Presenter</label>
-                            <select value={modelType} onChange={(e) => setModelType(e.target.value as ModelType)} className="w-full text-xs p-2.5 rounded-lg border border-slate-200 bg-white">
-                                <option value="no-model">Tanpa Model</option>
-                                <option value="hand-model">Dipegang Tangan</option>
-                                <option value="indo">Model Indonesia</option>
-                                <option value="bule">Model Western</option>
-                                <option value="mannequin">Mannequin</option>
-                            </select>
-                            {(modelType !== 'no-model' && modelType !== 'hand-model') && (
-                                <div className="mt-2 grid grid-cols-3 gap-2">
+                    </div>
+
+                    <div>
+                        <label className="text-xs font-bold text-slate-500 mb-2 block uppercase tracking-wider text-[10px]">Model Presenter</label>
+                        <select value={modelType} onChange={(e) => setModelType(e.target.value as ModelType)} className="w-full text-xs p-2.5 rounded-lg border border-slate-200 bg-white outline-none focus:border-indigo-500">
+                            <option value="no-model">Tanpa Model</option>
+                            <option value="hand-model">Dipegang Tangan</option>
+                            <option value="indo">Model Asia / Indonesia</option>
+                            <option value="bule">Model Western / Bule</option>
+                            <option value="mannequin">Mannequin</option>
+                        </select>
+                        {(modelType !== 'no-model' && modelType !== 'hand-model') && (
+                            <div className="mt-3 p-3 bg-white border border-slate-100 rounded-lg shadow-inner">
+                                <div className="flex gap-2 mb-3">
+                                    <button onClick={() => setGender('female')} className={`flex-1 py-1.5 text-xs font-bold rounded transition ${gender === 'female' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : 'bg-slate-50 text-slate-400 border border-transparent'}`}>Wanita</button>
+                                    <button onClick={() => setGender('male')} className={`flex-1 py-1.5 text-xs font-bold rounded transition ${gender === 'male' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : 'bg-slate-50 text-slate-400 border border-transparent'}`}>Pria</button>
+                                </div>
+                                <div className="grid grid-cols-3 gap-1 mb-2">
                                     {['standard', 'casual', 'gen-z', 'formal', 'candid', 'cinematic'].map(p => (
-                                        <button key={p} onClick={() => setPoseStyle(p as PoseStyle)} className={`py-1 text-[10px] rounded border ${poseStyle === p ? 'bg-indigo-100 border-indigo-300 text-indigo-700' : 'bg-white'}`}>{p}</button>
+                                        <button key={p} onClick={() => setPoseStyle(p as PoseStyle)} className={`py-1 text-[9px] font-bold rounded border uppercase ${poseStyle === p ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-slate-50 text-slate-500'}`}>{p}</button>
                                     ))}
                                 </div>
-                            )}
+                                {gender === 'female' && (
+                                    <button onClick={() => setUseHijab(!useHijab)} className="w-full flex items-center gap-2 text-[10px] text-slate-700 font-bold mt-2 p-2 bg-slate-50 rounded hover:bg-white transition border border-transparent hover:border-slate-200">
+                                        {useHijab ? <CheckSquare className="w-4 h-4 text-indigo-600"/> : <Square className="w-4 h-4 text-slate-400"/>} Gunakan Hijab
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="flex gap-4">
+                        <div className="flex-1">
+                            <label className="text-xs font-bold text-slate-500 mb-2 block uppercase text-[10px]">Jumlah Foto</label>
+                            <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg p-2">
+                                <input type="range" min="1" max="4" value={imageCount} onChange={(e) => setImageCount(parseInt(e.target.value))} className="flex-1 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
+                                <span className="text-xs font-black text-indigo-600 min-w-[12px]">{imageCount}</span>
+                            </div>
                         </div>
-                        <div>
-                            <label className="text-xs font-bold text-slate-500 mb-2 flex justify-between">
-                                <span>Jumlah Foto</span>
-                                <span className="text-indigo-600">{imageCount}</span>
-                            </label>
-                            <input type="range" min="1" max="4" value={imageCount} onChange={(e) => setImageCount(parseInt(e.target.value))} className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
+                        <div className="flex-1">
+                            <label className="text-xs font-bold text-slate-500 mb-2 block uppercase text-[10px]">Konteks Produk</label>
+                            <input type="text" value={productContext} onChange={(e) => setProductContext(e.target.value)} placeholder="Kemeja, Botol, dll" className="w-full text-xs p-2.5 rounded-lg border border-slate-200 bg-white outline-none focus:border-indigo-500" />
                         </div>
                     </div>
                 </div>
 
-                <div className="mt-auto pb-20 md:pb-4">
-                    <div className="flex items-center justify-between px-2 mb-2">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Estimasi Token</span>
-                        <div className="flex items-center gap-1 bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full border border-yellow-200 shadow-sm">
-                            <Coins className="w-3 h-3" />
-                            <span className="text-[10px] font-bold">~{calculateCost()} Units</span>
+                <div className="mt-auto pb-20 md:pb-4 space-y-3">
+                    <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200 space-y-2">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 text-yellow-800">
+                                <Coins className="w-3.5 h-3.5" />
+                                <span className="text-[10px] font-black uppercase tracking-widest">Estimasi Biaya Studio</span>
+                            </div>
+                            <div className="flex flex-col items-end">
+                                {currentCosts.free ? (
+                                    <span className="text-xs font-black text-green-700 uppercase tracking-tighter">Gratis (Free Tier)</span>
+                                ) : (
+                                    <>
+                                        <span className="text-xs font-black text-yellow-900">{currentCosts.tokens.toLocaleString()} Tokens</span>
+                                        <span className="text-[10px] font-bold text-green-700">Rp {currentCosts.idr.toLocaleString()} (Est. PPN)</span>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                        <div className="flex items-start gap-2 text-[9px] text-yellow-700 leading-tight border-t border-yellow-200 pt-2">
+                            <Info className="w-3 h-3 shrink-0 mt-0.5" />
+                            <p>Harga final ditentukan oleh Google Cloud Console. Gunakan <b>Free Tier</b> jika ingin mencoba gratis.</p>
                         </div>
                     </div>
-                    <button onClick={handleGenerate} disabled={!uploadedImage || isGenerating} className="w-full py-4 rounded-xl font-bold text-white shadow-lg flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 disabled:opacity-50">
-                        {isGenerating ? <RefreshCw className="animate-spin w-5 h-5"/> : <Sparkles className="w-5 h-5"/>}
-                        {isGenerating ? (progressMsg || 'Processing...') : 'Generate Photo'}
+
+                    {errorMsg && (
+                        <div className="p-3 bg-red-50 text-red-600 text-[10px] font-bold rounded-lg border border-red-100 flex gap-2 animate-in slide-in-from-bottom-2">
+                            <AlertCircle className="w-4 h-4 shrink-0" />
+                            <span>{errorMsg}</span>
+                        </div>
+                    )}
+
+                    <button 
+                        onClick={handleGenerate} 
+                        disabled={!uploadedImage || isGenerating} 
+                        className="w-full py-4 rounded-xl font-black text-xs uppercase tracking-[0.2em] text-white shadow-lg transition-all active:scale-[0.98] disabled:opacity-40 bg-gradient-to-r from-indigo-600 to-purple-600 flex items-center justify-center gap-2"
+                    >
+                        {isGenerating ? <RefreshCw className="animate-spin w-5 h-5"/> : <Sparkles className="w-4 h-4"/>}
+                        {isGenerating ? (progressMsg || 'Memproses Studio...') : 'Mulai Photoshoot'}
                     </button>
                 </div>
             </div>
 
             <div className={`flex-1 bg-slate-100 p-4 md:p-8 overflow-y-auto ${generatedMedia.length === 0 && !isGenerating ? 'hidden md:block' : 'block'}`}>
                 <div className="max-w-5xl mx-auto h-full flex flex-col">
-                    <div className="flex items-center justify-between mb-4 md:mb-6">
-                        <h2 className="text-xl font-bold text-slate-800">Hasil Generation</h2>
-                        <button onClick={() => setGeneratedMedia([])} className="md:hidden text-xs font-bold text-indigo-600 bg-white px-3 py-1.5 rounded-lg border border-indigo-100">+ Buat Baru</button>
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-xl font-bold text-slate-800 tracking-tight">Studio Gallery</h2>
+                        {generatedMedia.length > 0 && (
+                            <button onClick={() => setGeneratedMedia([])} className="md:hidden text-[10px] font-bold text-indigo-600 bg-white px-3 py-1.5 rounded-lg border border-indigo-100 shadow-sm uppercase tracking-wider">+ Buat Baru</button>
+                        )}
                     </div>
+
                     {generatedMedia.length === 0 && !isGenerating ? (
-                        <div className="flex-1 flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-slate-300 rounded-2xl bg-slate-200/50 min-h-[300px]">
-                            <LayoutGrid className="w-16 h-16 mb-4 text-slate-300" />
-                            <p className="font-medium">Area Hasil</p>
+                        <div className="flex-1 flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-slate-300 rounded-2xl bg-white/50 min-h-[400px]">
+                            <LayoutGrid className="w-16 h-16 mb-4 opacity-20" />
+                            <p className="font-bold text-sm tracking-widest uppercase opacity-40 text-center">Lakukan Photoshoot Untuk Melihat Hasil Studio</p>
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-24">
                             {isGenerating && (
                                 <div className="aspect-square bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col items-center justify-center p-8 animate-pulse">
-                                    <div className="w-16 h-16 rounded-full border-4 border-slate-100 border-t-indigo-600 animate-spin mb-4"></div>
-                                    <p className="text-sm font-bold text-slate-700">Sedang Memproses...</p>
+                                    <div className="w-12 h-12 rounded-full border-4 border-slate-100 border-t-indigo-600 animate-spin mb-4"></div>
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Processing Studio...</p>
                                 </div>
                             )}
                             {generatedMedia.map((media) => (
-                                <div key={media.id} className="group relative bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-200">
+                                <div key={media.id} className="group relative bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-200 hover:shadow-xl transition-all duration-300">
                                     <img src={media.url} alt="Result" className="w-full h-auto object-contain bg-slate-50" />
-                                    <div className="absolute top-4 right-4 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={() => handleDownload(media)} className="bg-white text-indigo-600 p-2.5 rounded-full shadow-lg"><Download className="w-5 h-5" /></button>
+                                    <div className="absolute top-4 right-4 opacity-100 md:opacity-0 group-hover:opacity-100 transition-all">
+                                        <button onClick={() => handleDownload(media)} className="bg-white/90 text-indigo-600 p-3 rounded-full shadow-2xl hover:scale-110 active:scale-90 transition flex items-center justify-center"><Download className="w-5 h-5" /></button>
                                     </div>
-                                    <div className="p-3 bg-white border-t border-slate-100 flex justify-between items-center">
-                                        <span className="text-xs font-medium text-slate-600 capitalize">{media.style.replace('-', ' ')}</span>
-                                        <span className="text-[10px] text-slate-400">ID: {media.id.toString().slice(-4)}</span>
+                                    <div className="p-4 bg-white border-t border-slate-100 flex justify-between items-center">
+                                        <div>
+                                            <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">{media.style}</span>
+                                            <div className="text-[9px] text-slate-400 font-mono">ID-{media.id.toString().slice(-4)}</div>
+                                        </div>
+                                        <div className="bg-slate-50 px-2 py-1 rounded border text-[9px] font-bold text-slate-500 uppercase">{media.ratio}</div>
                                     </div>
                                 </div>
                             ))}
