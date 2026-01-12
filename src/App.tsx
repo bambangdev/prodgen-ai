@@ -198,15 +198,27 @@ export default function App() {
     }
   };
 
+  // --- LOGIKA ESTIMASI BIAYA BERDASARKAN TAGIHAN REAL USER ---
   const calculateCosts = () => {
       if (engine === 'huggingface' || (engine === 'gemini-nano' && accountTier === 'free')) {
           return { tokens: 0, idr: 0, free: true };
       }
-      let tokensPerImage = qualityMode === 'eco' ? 258 : 1024;
+      
+      // Menggunakan estimasi token multimodal Gemini yang lebih akurat
+      // Gemini menghitung token per kotak (patch) gambar.
+      let tokensPerImage = qualityMode === 'eco' ? 258 : 3000;
       let totalInputTokens = tokensPerImage * imageCount;
-      let baseCostPerImage = qualityMode === 'eco' ? 550 : 950; 
-      let estimatedIdr = (baseCostPerImage * imageCount) * 1.11;
-      return { tokens: totalInputTokens, idr: Math.ceil(estimatedIdr), free: false };
+      
+      // BERDASARKAN DATA USER: 39.000 token ~ Rp 112.000
+      // Rate per 1.000 token = 112.000 / 39 = Rp 2.871
+      const ratePer1k = 2871; 
+      let estimatedIdr = (totalInputTokens / 1000) * ratePer1k;
+
+      return { 
+          tokens: totalInputTokens, 
+          idr: Math.ceil(estimatedIdr),
+          free: false
+      };
   };
 
   const currentCosts = calculateCosts();
@@ -348,7 +360,7 @@ export default function App() {
               </div>
               <div>
                   <h1 className="font-bold text-lg tracking-tight text-slate-900 leading-none">ProdGen <span className="text-indigo-600">Pro</span></h1>
-                  <p className="text-[10px] text-slate-400 font-medium tracking-wide uppercase">AI Studio v2.5.1</p>
+                  <p className="text-[10px] text-slate-400 font-medium tracking-wide uppercase">AI Studio v2.5.2</p>
               </div>
             </div>
             <button 
@@ -429,7 +441,7 @@ export default function App() {
 
                 <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100">
                     <div className="flex items-center justify-between mb-3">
-                        <h2 className="text-sm font-bold text-indigo-900 flex items-center gap-2"><Zap className="w-4 h-4 text-orange-500"/> Mode Hemat Piksel</h2>
+                        <h2 className="text-sm font-bold text-indigo-900 flex items-center gap-2"><Zap className="w-4 h-4 text-orange-500"/> Mode Kualitas</h2>
                     </div>
                     <div className="flex gap-2">
                         <button onClick={() => setQualityMode('eco')} className={`flex-1 p-2 rounded-lg border transition text-center ${qualityMode === 'eco' ? 'bg-white border-green-500 shadow-sm ring-1 ring-green-500 font-bold text-green-700' : 'bg-transparent border-indigo-200 text-indigo-700/60'}`}>
@@ -500,6 +512,7 @@ export default function App() {
                 </div>
 
                 <div className="mt-auto pb-20 md:pb-4 space-y-3">
+                    {/* --- KONTROL BIAYA UI DISESUAIKAN --- */}
                     <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200 space-y-2">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2 text-yellow-800">
@@ -512,14 +525,14 @@ export default function App() {
                                 ) : (
                                     <>
                                         <span className="text-xs font-black text-yellow-900">{currentCosts.tokens.toLocaleString()} Tokens</span>
-                                        <span className="text-[10px] font-bold text-green-700">Rp {currentCosts.idr.toLocaleString()} (Est. PPN)</span>
+                                        <span className="text-[10px] font-bold text-green-700">Rp {currentCosts.idr.toLocaleString()} (Sudah PPN)</span>
                                     </>
                                 )}
                             </div>
                         </div>
                         <div className="flex items-start gap-2 text-[9px] text-yellow-700 leading-tight border-t border-yellow-200 pt-2">
                             <Info className="w-3 h-3 shrink-0 mt-0.5" />
-                            <p>Harga final ditentukan oleh Google Cloud Console. Gunakan <b>Free Tier</b> jika ingin mencoba gratis.</p>
+                            <p>Berdasarkan tagihan Anda: biaya per 1k token adalah <b>Rp 2.871</b>. Model preview multimodal mengonsumsi token input lebih besar daripada teks.</p>
                         </div>
                     </div>
 
